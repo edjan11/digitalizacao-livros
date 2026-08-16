@@ -1,0 +1,31 @@
+# Ambientes Python
+.venv/
+.venv_kraken/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Builds e empacotamento (PyInstaller / Inno)
+build/
+build_*/
+dist/
+dist_*/
+*.spec.bak
+
+# Dados operacionais e temporários
+.data/
+.tmp_*/
+.tmp_*
+.tmp_inspect*/
+*.log
+
+# Modelos grandes (não entram no controle de versão)
+models/
+
+# Configurações locais com caminhos/segredos
+*.local.yaml
+
+# Sistema
+Thumbs.db
+Desktop.ini
