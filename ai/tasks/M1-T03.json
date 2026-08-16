@@ -1,0 +1,17 @@
+{
+  "id": "M1-T03",
+  "milestone": "M1",
+  "objective": "Testes de caracterizacao da state machine EXISTENTE (AutoCaptureController) sem refatorar: matriz de transicoes e casos de borda.",
+  "context_files": ["src/capture/auto_capture.py", "tests/test_captura_automatica.py"],
+  "allowed_files": ["tests/test_captura_automatica.py"],
+  "acceptance_criteria": [
+    "Matriz de transicoes: SEM_FOLHA→detectada→estabilizando→pronta→capturada→cooldown verificada com status e flag capturar",
+    "Casos de borda cobertos: documento some no meio; movimento volta durante estabilizacao (reset); falso contorno/borda; captura manual via marcar_capturada; cooldown; oscilacao do detector (contorno presente/ausente)",
+    "Nenhuma linha de src/capture/auto_capture.py alterada"
+  ],
+  "test_commands": ["pytest tests/test_captura_automatica.py -q"],
+  "risk": "baixo",
+  "rollback": "git checkout tests/test_captura_automatica.py",
+  "context_budget_tokens": 1800,
+  "notes": "Somente caracterizacao: documenta o comportamento atual, nao muda nada."
+}

@@ -1,0 +1,18 @@
+{
+  "id": "M1-T00",
+  "milestone": "M1",
+  "objective": "Instalar dependencias de desenvolvimento psutil e pytest-timeout e registrar versoes em requirements-dev.txt.",
+  "context_files": ["requirements.txt"],
+  "allowed_files": ["requirements-dev.txt", "pytest.ini", ".venv"],
+  "acceptance_criteria": [
+    "psutil importavel e versao registrada em requirements-dev.txt",
+    "pytest-timeout importavel e versao registrada",
+    "pytest.ini com timeout global (detecta deadlock, nao benchmark)",
+    "nenhuma dependencia runtime nova"
+  ],
+  "test_commands": [".venv/Scripts/python.exe -c \"import psutil, pytest_timeout; print(psutil.__version__)\""],
+  "risk": "baixo",
+  "rollback": "pip uninstall -y psutil pytest-timeout; git checkout pytest.ini",
+  "context_budget_tokens": 800,
+  "notes": "pytest-timeout e guarda de deadlock, nao medidor de performance."
+}

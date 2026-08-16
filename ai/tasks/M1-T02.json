@@ -1,0 +1,29 @@
+{
+  "id": "M1-T02",
+  "milestone": "M1",
+  "objective": "Telemetria da captura: transicoes de estado (eventos), amostra 1 Hz de FPS de preview, frames analisados, latencia do detector, duracao de salvamento do JPG, tamanho das filas e jitter da UI (freeze). Sem log por frame.",
+  "context_files": [
+    "src/ui/camera_capture_dialog.py",
+    "src/ui/scan_screen.py",
+    "src/services/scan_pipeline.py",
+    "src/services/telemetry.py"
+  ],
+  "allowed_files": [
+    "src/ui/camera_capture_dialog.py",
+    "src/ui/scan_screen.py",
+    "src/services/scan_pipeline.py",
+    "src/services/telemetry.py"
+  ],
+  "acceptance_criteria": [
+    "Eventos: capture.state (transicao, com duracao no estado anterior), capture.saved, ocr.secondary_finished",
+    "Amostra 1 Hz: capture.sample com fps_preview, fps_analisado, detector_ms_max, save_ms_max, ui_jitter_ms_max, fila_*",
+    "Transicoes detectadas por mudanca de status (nao por frame)",
+    "Nenhuma imagem/texto no log",
+    "77/77 testes verdes ao final"
+  ],
+  "test_commands": ["pytest tests/test_captura_automatica.py tests/test_consulta.py -q"],
+  "risk": "medio",
+  "rollback": "git revert do commit da task",
+  "context_budget_tokens": 2500,
+  "notes": "MEDICAO. A camera real sera medida na proxima sessao do operador; numeros sinteticos vao no relatorio."
+}

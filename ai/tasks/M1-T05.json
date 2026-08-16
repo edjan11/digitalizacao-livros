@@ -1,0 +1,18 @@
+{
+  "id": "M1-T05",
+  "milestone": "M1",
+  "objective": "Relatorio de baseline operacional consolidando M1-T01..T04: gargalos para o OPERADOR (nao apenas a funcao mais lenta), candidatos para M2/M3, e o que NAO precisa ser mexido.",
+  "context_files": ["ai/reports/baseline.md", "ai/reports/milestone_M1.md"],
+  "allowed_files": ["ai/reports/milestone_M1.md", "ai/STATE.json", "ai/DECISIONS.md"],
+  "acceptance_criteria": [
+    "Tabela de metricas de computacao (CPU/RAM/tempos/fila) separada das metricas de operacao (tempo ate proxima captura, freeze, capturas/min, falso disparo, espera desnecessaria, backlog sem recuperacao)",
+    "Gargalos identificados do ponto de vista do operador",
+    "Recomendacoes concretas de tasks M2 e M3",
+    "Lista explicita do que NAO precisa ser mexido"
+  ],
+  "test_commands": [],
+  "risk": "baixo",
+  "rollback": "git checkout ai/reports/milestone_M1.md",
+  "context_budget_tokens": 1500,
+  "notes": "Entregar e PARAR para revisao antes de iniciar M2."
+}

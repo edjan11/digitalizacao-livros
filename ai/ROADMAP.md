@@ -6,7 +6,7 @@
 | # | Milestone | Já existe | O que falta |
 |---|---|---|---|
 | **M0** | Baseline + inventário | 77/77 verdes, docs, git criado | (concluído 2026-08-16) |
-| **M1** | Telemetria + testes de caracterização | — | Métricas por etapa (tempo OCR/Qwen, profundidade de fila, taxa de incertos) em JSONL; testes de caracterização da captura e da fila sob carga |
+| **M1** | Telemetria + caracterização | — | **Observacional (sem otimizar/refatorar)**: T00 dev-deps (psutil, pytest-timeout); T01 telemetria do worker/OCR (eventos, 1 Hz, sem PII); T02 telemetria da captura (FPS, latência detector, transições, salvar, filas, freeze UI); T03 matriz de transições da state machine existente (sem refatorar); T04 stress da topologia atual (1 worker, 1x/2x/5x/10x, kill+retomada, duplicidade/perda; 2 workers só em banco isolado); T05 relatório operacional (gargalo para o OPERADOR, não só o mais lento) |
 | **M2** | Capture State Machine | ~85% (`AutoCaptureController` com 6 testes) | Formalizar estados em `enum`; HUD de estado na prévia; mensagens consistentes; testes de transição |
 | **M3** | Mão/oclusão + Quality Gate | Mão heurística (`pontuacao_mao`) | Benchmark heurística vs MediaPipe em frames reais (só instala se vencer); **detecção de reflexo/glare** (novo, OpenCV) |
 | **M4** | Quality Audit background | Já em background (filas `scan_screen.py`) | Glare; **resumo fim-de-livro** (aprovadas/revisar/recapturar por motivo); persistência de qualidade por imagem |

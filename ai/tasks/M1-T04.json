@@ -1,0 +1,26 @@
+{
+  "id": "M1-T04",
+  "milestone": "M1",
+  "objective": "Stress da topologia ATUAL de producao (1 worker, lock exclusivo): carga sintetica 1x/2x/5x/10x, throughput/backlog/memoria/recuperacao; interrupcao no meio + retomada sem duplicidade/perda/associacao errada. Experimento de 2 workers apenas em banco temporario isolado, sem mudar a regra de producao.",
+  "context_files": [
+    "src/services/name_processing.py",
+    "tests/test_processamento_persistente.py"
+  ],
+  "allowed_files": [
+    "scripts/stress_fila_lote.py (novo)",
+    "ai/reports/milestone_M1.md (relatorio)"
+  ],
+  "acceptance_criteria": [
+    "Escalas 1x/2x/5x/10x executadas com 1 worker em banco temporario",
+    "Metricas coletadas: throughput (itens/s), backlog maximo, RSS (psutil), tempo total",
+    "Kill simulado no meio (should_stop) e retomada completa: 1 execucao por registro por etapa, zero perdidos, zero duplicados",
+    "2 workers no MESMO banco: segundo bloqueado pelo lock (experimento documentado)",
+    "Nenhuma alteracao em src/ de producao",
+    "Suite completa verde ao final"
+  ],
+  "test_commands": ["pytest tests/test_processamento_persistente.py -q", "python scripts/stress_fila_lote.py"],
+  "risk": "medio",
+  "rollback": "remover scripts/stress_fila_lote.py",
+  "context_budget_tokens": 3000,
+  "notes": "Nao e benchmark de 2 workers em producao; e stress da arquitetura real."
+}

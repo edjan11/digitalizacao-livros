@@ -1,0 +1,30 @@
+{
+  "id": "M1-T01",
+  "milestone": "M1",
+  "objective": "Telemetria event-based do worker/OCR: duracoes OCR rapido e Qwen, jobs, backlog da fila, taxa de incertos, sucesso/falha, CPU/RAM amostradas ~1 Hz. Sem PII, sem imagem, sem texto OCR nos logs.",
+  "context_files": [
+    "src/services/name_processing.py",
+    "src/services/telemetry.py (novo)",
+    "src/config/settings.py"
+  ],
+  "allowed_files": [
+    "src/services/telemetry.py",
+    "src/services/name_processing.py",
+    "src/config/settings.py",
+    "app.py",
+    "consulta.py"
+  ],
+  "acceptance_criteria": [
+    "Eventos emitidos: ocr.fast_started/finished, qwen.started/finished, job.failed, lote.status, resource.sample",
+    "Escrita assincrona (logging.handlers.QueueHandler/QueueListener), nunca no caminho critico",
+    "Amostrador 1 Hz de CPU/RAM do processo (psutil)",
+    "Campos limitados a allowlist tecnica; campos proibidos (nome/mae/data/texto/cpf/imagem) sao descartados",
+    "Desligavel por telemetry.enabled=false; default true",
+    "77/77 testes verdes ao final"
+  ],
+  "test_commands": ["pytest tests/test_processamento_persistente.py -q"],
+  "risk": "medio",
+  "rollback": "git revert do commit da task",
+  "context_budget_tokens": 2500,
+  "notes": "MEDICAO, nao otimizacao. Nao alterar thresholds, motores nem fila."
+}

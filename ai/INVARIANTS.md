@@ -27,6 +27,14 @@ invariante é regressão, independente de passar nos testes.
     ok"; é falha a ser corrigida antes de avançar.
 12. **Não descartar alterações locais do usuário.** Antes de sobrescrever
     arquivos, conferir `git status`/`git diff`.
+13. **TELEMETRIA NÃO PODE ALTERAR O COMPORTAMENTO MEDIDO.**
+    - desligável (`telemetry.enabled`);
+    - sem imagem no log;
+    - sem OCR/texto sensível/dados pessoais por padrão (apenas identificadores
+      técnicos: ids, durações, contagens, flags);
+    - sem log por frame (eventos de transição + amostras ~1 Hz);
+    - sem I/O síncrono pesado no caminho da captura (fila de logging +
+      thread de escrita).
 
 ## Escala de gravidade de falha
 - Quebra invariante → bloqueio imediato do milestone, escalar para o revisor.
