@@ -1,0 +1,16 @@
+{
+  "id": "M1-T01",
+  "milestone": "M1",
+  "objective": "Uma mudanca logica e verificavel.",
+  "context_files": ["src/services/name_processing.py"],
+  "allowed_files": ["src/services/name_processing.py", "tests/test_x.py"],
+  "acceptance_criteria": [
+    "Criterio mensuravel 1",
+    "Criterio mensuravel 2"
+  ],
+  "test_commands": ["pytest tests/test_x.py -q"],
+  "risk": "baixo|medio|alto",
+  "rollback": "git revert <commit>",
+  "context_budget_tokens": 2000,
+  "notes": "1 mudanca logica, 1-4 arquivos, max 2 reparos antes de escalar."
+}
