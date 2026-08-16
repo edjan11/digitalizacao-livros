@@ -1,0 +1,4 @@
+# Dependencias de desenvolvimento (M1-T00)
+# Nao sao dependencias runtime do executavel.
+psutil==7.2.2
+pytest-timeout==2.5.0
