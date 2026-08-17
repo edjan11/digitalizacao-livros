@@ -1,12 +1,27 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from enum import Enum
 import time
 
 import cv2
 import numpy as np
 
 from ..imaging.document import detectar_quadrilatero_pagina
+
+
+class CaptureState(Enum):
+    """Estados da captura. Os valores sao as mensagens exibidas ao operador."""
+
+    SEM_FOLHA = "Posicione a pagina"
+    MAO_PRESENTE = "Retire a mao"
+    NAO_ENQUADRADA = "Afaste ou centralize a pagina"
+    AGUARDANDO_FOCO = "Aguardando foco"
+    AGUARDANDO_ESTABILIDADE = "Aguarde estabilizar"
+    PAGINA_PRONTAA = "Pagina pronta"
+    CAPTURADA = "Capturada"
+    TROQUE_PAGINA = "Troque a pagina"
+    CAPTURA_MANUAL = "Pronta para captura manual"
 
 
 @dataclass
@@ -20,6 +35,7 @@ class FrameAnalysis:
     capturar: bool = False
     enquadrada: bool = True
     pagina_contorno: np.ndarray | None = None
+    estado: CaptureState | None = None
 
 
 def _reduzir(frame: np.ndarray, largura: int = 480) -> np.ndarray:
@@ -78,15 +94,20 @@ class AutoCaptureController:
         mudanca_pagina: float = 10.0,
         foco_minimo: float = 55.0,
         mao_maxima: float = 0.20,
+        tempo_troca: float = 0.6,
     ) -> None:
         self.tempo_estavel = tempo_estavel
         self.movimento_maximo = movimento_maximo
         self.mudanca_pagina = mudanca_pagina
         self.foco_minimo = foco_minimo
         self.mao_maxima = mao_maxima
+        # Tempo minimo com a pagina NOVA presente e estavel para destravar o
+        # cooldown apos uma captura (M2-T02). Impede recaptura da mesma folha.
+        self.tempo_troca = tempo_troca
         self._anterior: np.ndarray | None = None
         self._capturada: np.ndarray | None = None
         self._estavel_desde: float | None = None
+        self._troca_desde: float | None = None
         self._bloqueada = False
 
     @staticmethod
@@ -124,87 +145,90 @@ class AutoCaptureController:
         mao_score = pontuacao_mao(frame)
         mao_presente = mao_score >= self.mao_maxima
 
+        def _resultado(
+            estado: CaptureState,
+            *,
+            movimento_f: float = movimento,
+            foco_f: float = foco,
+            mao: bool = mao_presente,
+            pagina: bool = pagina_presente,
+            contagem: float | None = None,
+            enquadrada_f: bool = enquadrada,
+            contorno_f: np.ndarray | None = contorno,
+            capturar: bool = False,
+        ) -> FrameAnalysis:
+            return FrameAnalysis(
+                movimento_f, foco_f, mao, pagina, estado.value,
+                contagem, capturar, enquadrada_f, contorno_f, estado,
+            )
+
         if self._bloqueada:
-            # A mão retirando a folha também muda muitos pixels. Ela nunca
-            # pode, sozinha, liberar um novo disparo; esperamos uma página
-            # limpa e diferente da foto capturada.
             if mao_presente:
-                return FrameAnalysis(
-                    movimento, foco, True, pagina_presente,
-                    "Retire a mao", None, False, enquadrada, contorno,
-                )
+                self._troca_desde = None
+                return _resultado(CaptureState.MAO_PRESENTE)
+            if not pagina_presente:
+                self._troca_desde = None
+                return _resultado(CaptureState.TROQUE_PAGINA)
             mudanca = (
                 float(cv2.absdiff(cinza, self._capturada).mean())
                 if self._capturada is not None and self._capturada.shape == cinza.shape
                 else 999.0
             )
-            if mudanca >= self.mudanca_pagina:
+            # A troca so destrava com uma pagina NOVA, presente e estavel por
+            # tempo_troca. A mesma folha voltando ou um frame sem pagina nao
+            # podem liberar recaptura (achado D-011, corrigido no M2-T02).
+            if mudanca >= self.mudanca_pagina and movimento <= self.movimento_maximo:
+                if self._troca_desde is None:
+                    self._troca_desde = agora
+                    return _resultado(CaptureState.TROQUE_PAGINA)
+                if agora - self._troca_desde < self.tempo_troca:
+                    return _resultado(CaptureState.TROQUE_PAGINA)
                 self._bloqueada = False
+                self._troca_desde = None
                 self._capturada = None
                 self._estavel_desde = None
             else:
-                return FrameAnalysis(
-                    movimento, foco, mao_presente, pagina_presente,
-                    "Troque a pagina", None, False, enquadrada, contorno,
-                )
+                self._troca_desde = None
+                return _resultado(CaptureState.TROQUE_PAGINA)
 
         if not pagina_presente:
             self._estavel_desde = None
-            return FrameAnalysis(
-                movimento, foco, mao_presente, False, "Posicione a pagina",
-                enquadrada=enquadrada, pagina_contorno=contorno,
-            )
+            return _resultado(CaptureState.SEM_FOLHA)
         if mao_presente:
             self._estavel_desde = None
-            return FrameAnalysis(
-                movimento, foco, True, True, "Retire a mao",
-                pagina_contorno=contorno,
-            )
+            return _resultado(CaptureState.MAO_PRESENTE)
         if not enquadrada:
             self._estavel_desde = None
-            return FrameAnalysis(
-                movimento, foco, False, True,
-                "Afaste ou centralize a pagina",
-                enquadrada=False, pagina_contorno=contorno,
-            )
+            return _resultado(CaptureState.NAO_ENQUADRADA)
         if foco < self.foco_minimo:
             self._estavel_desde = None
-            return FrameAnalysis(
-                movimento, foco, False, True, "Aguardando foco",
-                pagina_contorno=contorno,
-            )
+            return _resultado(CaptureState.AGUARDANDO_FOCO)
         if movimento > self.movimento_maximo:
             self._estavel_desde = None
-            return FrameAnalysis(
-                movimento, foco, False, True, "Aguarde estabilizar",
-                pagina_contorno=contorno,
-            )
+            return _resultado(CaptureState.AGUARDANDO_ESTABILIDADE)
 
         if self._estavel_desde is None:
             self._estavel_desde = agora
         restante = max(0.0, self.tempo_estavel - (agora - self._estavel_desde))
         if restante > 0:
-            return FrameAnalysis(
-                movimento, foco, False, True, "Pagina pronta", restante, False,
-                pagina_contorno=contorno,
-            )
+            return _resultado(CaptureState.PAGINA_PRONTAA, contagem=restante)
 
         self._bloqueada = True
         self._capturada = cinza.copy()
         self._estavel_desde = None
-        return FrameAnalysis(
-            movimento, foco, False, True, "Capturada", 0.0, True,
-            pagina_contorno=contorno,
-        )
+        self._troca_desde = None
+        return _resultado(CaptureState.CAPTURADA, contagem=0.0, capturar=True)
 
     def marcar_capturada(self, frame: np.ndarray) -> None:
         self._capturada = self._cinza(frame)
         self._anterior = self._capturada.copy()
         self._bloqueada = True
         self._estavel_desde = None
+        self._troca_desde = None
 
     def reset(self) -> None:
         self._anterior = None
         self._capturada = None
         self._estavel_desde = None
+        self._troca_desde = None
         self._bloqueada = False

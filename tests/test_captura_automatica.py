@@ -15,13 +15,19 @@ from src.imaging.quality import avaliar_qualidade, detectar_dobra_grande
 
 
 def _pagina(seed: int = 1) -> np.ndarray:
-    image = np.full((720, 960, 3), 225, np.uint8)
-    cv2.rectangle(image, (90, 45), (870, 675), (250, 250, 250), -1)
-    cv2.rectangle(image, (90, 45), (870, 675), (25, 25, 25), 5)
-    for y in range(100, 640, 30):
-        cv2.line(image, (125, y), (835, y), (65, 65, 65), 2)
+    """Folha sintetica realista (M2-T02): o enquadramento varia com o seed,
+    como frames reais de camera — paginas diferentes diferem em muito mais
+    que a caligrafia, permitindo o discriminador mudanca_pagina funcionar."""
+    image = np.full((720, 960, 3), 215 + (seed % 4) * 6, np.uint8)
+    dx = (seed % 5) * 14
+    dy = (seed % 3) * 12
+    x0, y0 = 90 + dx, 45 + dy
+    cv2.rectangle(image, (x0, y0), (870 + dx, 675 + dy), (250, 250, 250), -1)
+    cv2.rectangle(image, (x0, y0), (870 + dx, 675 + dy), (25, 25, 25), 5)
+    for y in range(y0 + 55, y0 + 600, 30):
+        cv2.line(image, (x0 + 35, y), (x0 + 745, y), (65, 65, 65), 2)
     cv2.putText(
-        image, f"Numero {6800 + seed}", (135, 90),
+        image, f"Numero {6800 + seed}", (x0 + 45, y0 + 45),
         cv2.FONT_HERSHEY_SIMPLEX, 0.8, (15, 15, 15), 2,
     )
     return image
@@ -46,7 +52,10 @@ def test_captura_so_depois_de_estavel_e_nao_repete_a_pagina():
     cv2.circle(outra, (480, 360), 80, (40, 40, 40), -1)
     assert not controller.analisar(outra, agora=3.0).capturar
     assert not controller.analisar(outra, agora=3.1).capturar
-    assert controller.analisar(outra, agora=4.2).capturar
+    # Pagina nova: confirmacao de troca (tempo_troca) destrava no proximo call
+    # (aqui em 4.7) e a estabilidade de 1,0 s comeca nesse instante.
+    assert not controller.analisar(outra, agora=4.7).capturar
+    assert controller.analisar(outra, agora=5.7).capturar
 
 
 def test_mao_bloqueia_auto_captura_e_vai_para_lista_refazer():
@@ -108,7 +117,8 @@ def test_simulacao_de_lote_captura_cada_pagina_uma_vez_com_mao_e_transicao():
         assert controller.analisar(mao, agora=agora).capturar is False
         agora += 0.1
         # vários frames estáveis simulam a câmera; exatamente um dispara.
-        for _ in range(8):
+        # Frames suficientes para: confirmacao de troca (tempo_troca) + estabilidade.
+        for _ in range(16):
             if controller.analisar(pagina, agora=agora).capturar:
                 capturas += 1
             agora += 0.1
@@ -129,6 +139,21 @@ def test_retirar_mao_sem_trocar_folha_nao_libera_duplicata():
     assert controller.analisar(mao, agora=0.2).capturar is False
     assert controller.analisar(pagina, agora=0.3).capturar is False
     assert controller.analisar(pagina, agora=0.4).status == "Troque a pagina"
+
+
+def test_estado_enum_consistente_com_status():
+    from src.capture.auto_capture import CaptureState
+
+    pagina = _pagina(50)
+    controller = AutoCaptureController()
+    estados_vistos = set()
+    for t in (0.0, 0.1, 0.2, 0.3):
+        resultado = controller.analisar(pagina, agora=t)
+        assert resultado.estado is not None
+        assert resultado.status == resultado.estado.value
+        estados_vistos.add(resultado.estado)
+    assert CaptureState.AGUARDANDO_ESTABILIDADE in estados_vistos
+    assert CaptureState.PAGINA_PRONTAA in estados_vistos
 
 
 def _pagina_vazia() -> np.ndarray:
@@ -205,18 +230,42 @@ def test_captura_manual_marca_bloqueio_sem_disparo_automatico():
     assert not controller.analisar(pagina, agora=0.3).capturar
 
 
-def test_detector_oscilando_pode_liberar_recaptura_da_mesma_folha():
-    """ACHADO M1: um frame sem pagina entre o cooldown destrava o bloqueio; se a
-    MESMA folha voltar, a captura e liberada de novo (potencial duplicata).
-    Comportamento ATUAL documentado; candidato a correcao no M2."""
+def test_detector_oscilando_nao_recaptura_a_mesma_folha():
+    """Correcao M2-T02 (D-011): a mesma folha que volta NAO destrava o cooldown.
+
+    Um frame sem pagina ou a mesma folha retornando nao podem liberar recaptura.
+    """
     pagina = _pagina(34)
     controller = AutoCaptureController(tempo_estavel=0.0)
     assert controller.analisar(pagina, agora=0.0).status == "Aguarde estabilizar"
     assert controller.analisar(pagina, agora=0.1).capturar
     assert controller.analisar(pagina, agora=0.2).status == "Troque a pagina"
 
-    # Frame sem pagina destrava o bloqueio de cena.
-    assert controller.analisar(_pagina_vazia(), agora=0.3).status == "Posicione a pagina"
-    # A mesma folha retorna: primeiro frame alto movimento, nao captura.
-    assert controller.analisar(pagina, agora=0.4).status == "Aguarde estabilizar"
-    assert controller.analisar(pagina, agora=0.4).capturar  # e captura em seguida
+    # Frame sem pagina permanece bloqueado (antes destravava o cooldown).
+    sem = controller.analisar(_pagina_vazia(), agora=0.3)
+    assert sem.status == "Troque a pagina"
+    assert not sem.capturar
+    # A mesma folha voltando continua bloqueada por tempo indeterminado.
+    for t in (0.4, 0.5, 0.8, 1.2):
+        repetida = controller.analisar(pagina, agora=t)
+        assert repetida.status == "Troque a pagina"
+        assert not repetida.capturar
+
+
+def test_cooldown_destrava_com_pagina_nova_estavel_por_tempo_troca():
+    """Pagina NOVA, presente e estavel por tempo_troca destrava o cooldown."""
+    pagina1 = _pagina(40)
+    pagina2 = _pagina(41)
+    controller = AutoCaptureController(tempo_estavel=0.3, tempo_troca=0.5)
+    assert controller.analisar(pagina1, agora=0.0).status == "Aguarde estabilizar"
+    assert controller.analisar(pagina1, agora=1.0).status == "Pagina pronta"
+    assert controller.analisar(pagina1, agora=1.3).capturar
+
+    # Virada: sem pagina -> bloqueado; pagina nova entra.
+    assert controller.analisar(_pagina_vazia(), agora=1.4).status == "Troque a pagina"
+    assert controller.analisar(pagina2, agora=1.5).status == "Troque a pagina"  # 1o frame
+    assert controller.analisar(pagina2, agora=1.6).status == "Troque a pagina"  # inicia troca
+    assert controller.analisar(pagina2, agora=1.9).status == "Troque a pagina"  # confirmando
+    destrave = controller.analisar(pagina2, agora=2.2)  # 0,6 s depois do inicio
+    assert destrave.status == "Pagina pronta"
+    assert not controller.analisar(pagina1, agora=2.5).capturar
