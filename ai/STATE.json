@@ -1,20 +1,22 @@
 {
   "project": "digitalizacao-livros",
-  "phase": "M0",
+  "phase": "M1",
   "status": "concluido",
-  "baseline": "77 passed in 363.62s (2026-08-16)",
-  "git": "commit 1b7266d (master, root commit)",
-  "current_task": "M0-baseline-inventario",
-  "last_tests": "77 passed",
-  "next_action": "revisar relatorio M0 e aprovar M1",
+  "baseline": "86 passed in 408.16s (2026-08-16) — era 77 no M0",
+  "git": "ultimo commit bb5f107",
+  "current_task": "M1-T05 (relatorio operacional)",
+  "last_tests": "86 passed",
+  "next_action": "aguardando aprovacao do M2",
+  "telemetry": "ativa (events.jsonl em data_dir/telemetry) — eventos ocr.*, qwen.*, job.failed, lote.status, capture.*, resource.sample",
   "open_risks": [
-    "glare/reflexo nao detectado (quality.py)",
-    "telemetria inexistente",
-    "estados de captura implicitos (sem enum)",
-    "painel de recaptura por folha inexistente"
+    "glare/reflexo nao detectado",
+    "oscilacao do detector pode recapturar a mesma folha (ACHADO M1-T03)",
+    "sem painel de 'o que falta no livro'",
+    "FPS/jitter reais da camera nao medidos (aguarda sessao do operador)"
   ],
   "pending_decisions": [
-    "M3: instalar mediapipe apenas se benchmark vencer a heuristica",
-    "M1: adicionar pytest-timeout e psutil (audit obrigatorio antes)"
+    "M2: tratar oscilacao do detector e formalizar estados em enum",
+    "M3: glare + benchmark maos",
+    "M4/M5: painel fim-de-livro e recaptura por folha"
   ]
 }
