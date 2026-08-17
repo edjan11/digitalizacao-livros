@@ -10,7 +10,7 @@ from ..config.settings import APP_VERSION, data_dir
 
 # Incrementar somente quando SCHEMA/_migrate/SEEDS exigirem uma nova passagem.
 # Abrir uma conexao de worker nao deve recriar dezenas de tabelas e indices.
-SCHEMA_REVISION = 2
+SCHEMA_REVISION = 3
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS acervo (
