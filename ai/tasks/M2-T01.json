@@ -1,0 +1,17 @@
+{
+  "id": "M2-T01",
+  "milestone": "M2",
+  "objective": "Formalizar os estados da captura em um enum CaptureState, com FrameAnalysis.estado tipado e mensagens centralizadas. SEM mudanca de comportamento.",
+  "context_files": ["src/capture/auto_capture.py", "tests/test_captura_automatica.py"],
+  "allowed_files": ["src/capture/auto_capture.py", "tests/test_captura_automatica.py"],
+  "acceptance_criteria": [
+    "enum CaptureState com os estados atuais (SEM_FOLHA, MAO_PRESENTE, NAO_ENQUADRADA, AGUARDANDO_FOCO, AGUARDANDO_ESTABILIDADE, PAGINA_PRONTAA, CAPTURADA, TROQUE_PAGINA, CAPTURA_MANUAL)",
+    "FrameAnalysis ganha campo estado; strings de status derivam do enum (valores identicos aos atuais)",
+    "Nenhuma mudanca de logica/limiares; todos os testes de captura seguem verdes"
+  ],
+  "test_commands": ["pytest tests/test_captura_automatica.py -q"],
+  "risk": "baixo",
+  "rollback": "git revert do commit da task",
+  "context_budget_tokens": 1800,
+  "notes": "Apenas tipagem/formalizacao; comportamento identico."
+}

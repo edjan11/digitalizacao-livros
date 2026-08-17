@@ -1,0 +1,17 @@
+{
+  "id": "M2-T03",
+  "milestone": "M2",
+  "objective": "HUD de estado na previa da camera: status colorido por estado, overlay com o estado + contagem regressiva e indicador de bloqueio. Sem camera real: testavel offscreen.",
+  "context_files": ["src/ui/camera_capture_dialog.py", "src/capture/auto_capture.py"],
+  "allowed_files": ["src/ui/camera_capture_dialog.py", "tests/test_captura_automatica.py"],
+  "acceptance_criteria": [
+    "Rótulo de status fica colorido por estado (verde pronto, laranja espera, vermelho bloqueio/mao)",
+    "Overlay na previa mostra estado + contagem; TROQUE_PAGINA exibe indicador de bloqueio",
+    "Teste offscreen cobre as cores e o texto do HUD"
+  ],
+  "test_commands": ["pytest tests/test_captura_automatica.py -q"],
+  "risk": "baixo",
+  "rollback": "git revert do commit da task",
+  "context_budget_tokens": 1800,
+  "notes": "UI apenas; nenhum comportamento de captura muda."
+}

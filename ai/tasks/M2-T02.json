@@ -1,0 +1,19 @@
+{
+  "id": "M2-T02",
+  "milestone": "M2",
+  "objective": "Corrigir o achado D-011: o cooldown so destrava com TROCA REAL de folha (pagina nova, diferente, estavel por um tempo minimo). Frame sem pagina ou a mesma folha voltando NAO podem liberar recaptura.",
+  "context_files": ["src/capture/auto_capture.py", "tests/test_captura_automatica.py"],
+  "allowed_files": ["src/capture/auto_capture.py", "tests/test_captura_automatica.py"],
+  "acceptance_criteria": [
+    "Novo parametro tempo_troca (default 0.6s) no AutoCaptureController",
+    "Bloqueado + sem pagina presente -> permanece 'Troque a pagina' (nunca destrava)",
+    "Bloqueado + mesma folha de volta -> permanece bloqueado (mudanca abaixo do limiar)",
+    "Bloqueado + pagina NOVA estavel por tempo_troca -> destrava e segue o fluxo normal",
+    "Testes de captura atualizados e verdes; teste da oscilacao reflete o comportamento corrigido"
+  ],
+  "test_commands": ["pytest tests/test_captura_automatica.py -q"],
+  "risk": "medio",
+  "rollback": "git revert do commit da task",
+  "context_budget_tokens": 2400,
+  "notes": "Comportamento propositalmente muda (bug fix). Limiares existentes intocados."
+}

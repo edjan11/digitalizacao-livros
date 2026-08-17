@@ -1,0 +1,18 @@
+{
+  "id": "M2-T04",
+  "milestone": "M2",
+  "objective": "Fechar o M2: suite completa verde, relatorio ai/reports/milestone_M2.md, STATE.json e DECISIONS.md atualizados.",
+  "context_files": ["ai/reports/milestone_M1.md", "ai/STATE.json"],
+  "allowed_files": ["ai/reports/milestone_M2.md", "ai/STATE.json", "ai/DECISIONS.md", "ai/ROADMAP.md"],
+  "acceptance_criteria": [
+    "Suite completa verde (87+ testes) registrada no relatorio",
+    "Relatorio M2: estados formalizados, correcao D-011, HUD, testes, riscos restantes",
+    "DECISIONS.md com D-013 (estados enum) e D-014 (fix oscilacao)",
+    "STATE.json com fase M2 concluida"
+  ],
+  "test_commands": ["pytest -q"],
+  "risk": "baixo",
+  "rollback": "git checkout ai/",
+  "context_budget_tokens": 1500,
+  "notes": "Entregar e PARAR para revisao antes de M3."
+}
