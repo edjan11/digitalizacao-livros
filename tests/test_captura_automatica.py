@@ -17,12 +17,14 @@ from src.imaging.quality import avaliar_qualidade, detectar_dobra_grande
 def _pagina(seed: int = 1) -> np.ndarray:
     """Folha sintetica realista (M2-T02): o enquadramento varia com o seed,
     como frames reais de camera — paginas diferentes diferem em muito mais
-    que a caligrafia, permitindo o discriminador mudanca_pagina funcionar."""
+    que a caligrafia, permitindo o discriminador mudanca_pagina funcionar.
+    O papel fica em ~225 (como o p99 das fotos reais do A-07), deixando o
+    reflexo (>=248) claramente separado para o detector de glare (M3-T01)."""
     image = np.full((720, 960, 3), 215 + (seed % 4) * 6, np.uint8)
     dx = (seed % 5) * 14
     dy = (seed % 3) * 12
     x0, y0 = 90 + dx, 45 + dy
-    cv2.rectangle(image, (x0, y0), (870 + dx, 675 + dy), (250, 250, 250), -1)
+    cv2.rectangle(image, (x0, y0), (870 + dx, 675 + dy), (225, 225, 225), -1)
     cv2.rectangle(image, (x0, y0), (870 + dx, 675 + dy), (25, 25, 25), 5)
     for y in range(y0 + 55, y0 + 600, 30):
         cv2.line(image, (x0 + 35, y), (x0 + 745, y), (65, 65, 65), 2)
@@ -154,6 +156,53 @@ def test_estado_enum_consistente_com_status():
         estados_vistos.add(resultado.estado)
     assert CaptureState.AGUARDANDO_ESTABILIDADE in estados_vistos
     assert CaptureState.PAGINA_PRONTAA in estados_vistos
+
+
+def _com_reflexo(pagina: np.ndarray, cobertura: float = 0.06) -> np.ndarray:
+    """Adiciona um reflexo especular (blob claro e lavado) sobre a pagina."""
+    com_reflexo = pagina.copy()
+    h, w = com_reflexo.shape[:2]
+    cx, cy = int(w * 0.45), int(h * 0.40)
+    raio = int(np.sqrt(w * h * cobertura / np.pi))
+    mascara = np.zeros((h, w), np.float32)
+    cv2.circle(mascara, (cx, cy), raio, 1.0, -1)
+    mascara = cv2.GaussianBlur(mascara, (0, 0), sigmaX=raio * 0.35)
+    blob = np.full((h, w, 3), 255, np.uint8)
+    com_reflexo = np.where(
+        mascara[..., None] > 0.35, blob, com_reflexo
+    ).astype(np.uint8)
+    return com_reflexo
+
+
+def test_detectar_glare_identifica_reflexo_e_ignora_pagina_normal():
+    from src.imaging.quality import avaliar_qualidade, detectar_glare
+
+    pagina = _pagina(60)
+    grau, status = detectar_glare(pagina)
+    assert status == "ok"
+    assert avaliar_qualidade(pagina)["reflexo_status"] == "ok"
+
+    com_reflexo = _com_reflexo(pagina, cobertura=0.06)
+    grau, status = detectar_glare(com_reflexo)
+    assert status == "reflexo_forte"
+    assert grau >= 0.03
+
+    qualidade = avaliar_qualidade(com_reflexo)
+    assert qualidade["reflexo_status"] == "reflexo_forte"
+    assert qualidade["repetir_captura"]
+    assert "reflexo forte sobre a pagina" in qualidade["motivos_refazer"]
+
+
+def test_detectar_glare_aviso_para_reflexo_pequeno():
+    from src.imaging.quality import avaliar_qualidade, detectar_glare
+
+    pagina = _pagina(61)
+    com_reflexo_pequeno = _com_reflexo(pagina, cobertura=0.012)
+    grau, status = detectar_glare(com_reflexo_pequeno)
+    assert status == "aviso"
+    assert avaliar_qualidade(com_reflexo_pequeno)["reflexo_status"] == "aviso"
+    # Aviso nao força recaptura.
+    assert not avaliar_qualidade(com_reflexo_pequeno)["repetir_captura"]
 
 
 def test_hud_da_camera_colore_estado_e_mostra_bloqueio():

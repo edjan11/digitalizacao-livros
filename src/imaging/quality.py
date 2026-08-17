@@ -17,6 +17,10 @@ OVEREXPOSED_PCT = 30
 SKEW_MAX = 3.0
 EMPTY_STD_THRESHOLD = 15
 BORDER_FRACTION = 0.05
+GLARE_BLOWOUT = 248
+GLARE_LOCAL_STD = 12
+GLARE_FRACAO_AVISO = 0.01
+GLARE_FRACAO_FORTE = 0.03
 
 
 def detectar_foco(image: np.ndarray) -> tuple[float, str]:
@@ -145,6 +149,46 @@ def detectar_dobra_grande(image: np.ndarray) -> tuple[float, bool]:
     return round(maior, 3), maior >= 0.34
 
 
+def detectar_glare(image: np.ndarray) -> tuple[float, str]:
+    """Detecta reflexo especular: blob compacto de pixels lavados e muito claros.
+
+    Nas fotos reais do A-07 o papel fica entre ~207 e ~228 (p99); um reflexo
+    satura a regiao para 248+. Papel branco comum nao forma um blob compacto
+    e lavado acima da fracao minima, porque as pautas e a tinta mantem contraste
+    local dentro de qualquer janela.
+    """
+    if image is None or image.size == 0:
+        return 0.0, "erro"
+    h, w = image.shape[:2]
+    escala = min(1.0, 800 / max(1, w))
+    pequena = cv2.resize(
+        image,
+        (max(1, int(w * escala)), max(1, int(h * escala))),
+        interpolation=cv2.INTER_AREA,
+    )
+    gray = cv2.cvtColor(pequena, cv2.COLOR_BGR2GRAY) if pequena.ndim == 3 else pequena
+    alto = (gray >= GLARE_BLOWOUT).astype(np.uint8)
+    if float(alto.mean()) < GLARE_FRACAO_AVISO * 0.1:
+        return 0.0, "ok"
+    g = gray.astype(np.float32)
+    media = cv2.boxFilter(g, ddepth=-1, ksize=(15, 15))
+    media2 = cv2.boxFilter(g * g, ddepth=-1, ksize=(15, 15))
+    desvio = np.sqrt(np.maximum(media2 - media * media, 0))
+    lavado = ((alto == 1) & (desvio < GLARE_LOCAL_STD)).astype(np.uint8)
+    n, _rotulos, stats, _centroides = cv2.connectedComponentsWithStats(
+        lavado, connectivity=8
+    )
+    if n <= 1:
+        return 0.0, "ok"
+    maior = int(stats[1:, cv2.CC_STAT_AREA].max())
+    fracao = maior / float(max(1, gray.shape[0] * gray.shape[1]))
+    if fracao >= GLARE_FRACAO_FORTE and fracao < 0.95:
+        return round(fracao, 4), "reflexo_forte"
+    if fracao >= GLARE_FRACAO_AVISO:
+        return round(fracao, 4), "aviso"
+    return round(fracao, 4), "ok"
+
+
 def avaliar_qualidade(image: np.ndarray, exigir_margens: bool = False) -> dict:
     # Qualidade nao precisa percorrer todos os pixels de uma fotografia de
     # dezenas de megapixels. A copia reduzida deixa a captura responsiva e o
@@ -164,8 +208,13 @@ def avaliar_qualidade(image: np.ndarray, exigir_margens: bool = False) -> dict:
     vazia = detectar_vazia(analise)
     oclusao = pontuacao_mao(analise)
     dobra_score, dobra = detectar_dobra_grande(analise)
+    glare_fracao, glare_status = detectar_glare(analise)
     corte = pagina_cortada_na_borda(analise) if exigir_margens else False
     statuses = [foco_status, expo_status, enq_status]
+    if glare_status == "reflexo_forte":
+        statuses.append("revisar")
+    elif glare_status == "aviso":
+        statuses.append("aviso")
     if vazia:
         status_geral = "erro_grave"
     elif "erro_grave" in statuses:
@@ -187,6 +236,8 @@ def avaliar_qualidade(image: np.ndarray, exigir_margens: bool = False) -> dict:
         motivos_refazer.append("mao ou objeto cobrindo a pagina")
     if dobra:
         motivos_refazer.append("dobra grande sobre o documento")
+    if glare_status == "reflexo_forte":
+        motivos_refazer.append("reflexo forte sobre a pagina")
     if corte:
         motivos_refazer.append("pagina ou margem de averbacoes cortada")
     if motivos_refazer and status_geral == "ok":
@@ -200,6 +251,8 @@ def avaliar_qualidade(image: np.ndarray, exigir_margens: bool = False) -> dict:
         "vazia": vazia,
         "oclusao_valor": round(oclusao, 3),
         "dobra_valor": dobra_score,
+        "reflexo_valor": round(glare_fracao, 4),
+        "reflexo_status": glare_status,
         "corte_detectado": corte,
         "motivos_refazer": motivos_refazer,
         "repetir_captura": bool(motivos_refazer),
