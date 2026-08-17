@@ -1,19 +1,20 @@
 {
   "project": "digitalizacao-livros",
-  "phase": "M3",
+  "phase": "M4",
   "status": "concluido",
-  "baseline": "92 passed in 286.68s (2026-08-16)",
-  "git": "ultimo commit e15c8d0 (glare); benchmark de maos em scripts/",
-  "current_task": "M3-T03 (fechamento do milestone)",
-  "last_tests": "92 passed",
-  "next_action": "aguardando aprovacao do M4 (painel fim-de-livro)",
+  "baseline": "97 passed in 125.91s (2026-08-16)",
+  "git": "ultimo commit 272d218",
+  "current_task": "M4-T04 (fechamento do milestone)",
+  "last_tests": "97 passed",
+  "next_action": "aguardando aprovacao do M5 (recaptura fora do livro) ou revisao do M4",
   "telemetry": "ativa — aguardando sessao real do operador para capture.sample",
   "open_risks": [
     "FPS/jitter reais da camera nao coletados",
-    "mao heuristica pode falhar com tons extremos/dedos finos (reavaliacao documentada)",
-    "glare com cobertura >95%% fica como aviso (deliberado)"
+    "Conferido e informativo (reabrir livro nao desmarca)",
+    "Recaptura fora do livro (livros ja conferidos) pendente de avaliacao (M5)"
   ],
   "pending_decisions": [
-    "M4: painel fim-de-livro (aprovadas/revisar/recapturar por motivo)"
+    "M5: fluxo de recaptura dedicado fora do livro?",
+    "coletar capture.sample em sessao real"
   ]
 }

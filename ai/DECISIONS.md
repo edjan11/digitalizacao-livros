@@ -76,3 +76,12 @@
 - Benchmark sintético: heurística 8/9 vs MediaPipe 1/9, custo 8,2 ms vs 24,7 ms.
 - MediaPipe instalado só para o experimento e desinstalado. Reavaliar apenas com
   frames reais de mãos (dedos finos) se o operador reportar falsos negativos.
+
+## D-017 · Painel de conferência por livro (M4)
+- `BookReviewDialog` no Digitalizador (sem tocar a Consulta): resumo
+  (aprovadas/revisar/recapturar/faltantes), filtros por tipo, cartões com
+  ABRIR FOTO/RECAPTURAR/IGNORAR e "Fechar e marcar conferido" (`livro.conferido_em`).
+- Botão "Conferir livro" no scan_screen + badge `[Conferido]` no seletor.
+- Recaptura reutiliza `substituir_captura` (mantém contagem, reavalia qualidade/OCR).
+- Decisão de UX: abrir só por botão manual; recaptura + revisões juntas; estado
+  persistido; painel só no Digitalizador.
