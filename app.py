@@ -46,6 +46,10 @@ def main():
     if not settings.path.exists():
         settings.save()
 
+    from src.services.telemetry import configurar, iniciar_amostrador
+    configurar(settings)
+    iniciar_amostrador()
+
     window = MainWindow(settings)
     window.show()
 

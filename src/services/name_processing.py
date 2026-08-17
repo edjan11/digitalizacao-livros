@@ -33,6 +33,7 @@ from ..metadata.extractor import extrair_metadados
 from ..metadata.normalizer import normalizar_busca, tratar_valor
 from ..ocr.engines import RapidOCRProvider, TesseractProvider
 from ..ocr.qwen_vl_engine import QwenRecordAnalyzer, modelo_qwen_instalado
+from .telemetry import emitir, registrar_amostrador
 
 
 ProgressCallback = Callable[[dict, str], None]
@@ -406,6 +407,8 @@ class NameBatchRunner:
             int(item.get("indice_na_imagem") or 0),
             int(item.get("total_na_imagem") or 1),
         )
+        emitir("ocr.fast_started", job_id=item.get("id"), registro_id=item.get("registro_id"),
+               imagem_id=item.get("imagem_id"), lote_id=self.lote_id, etapa="ocr_fast")
         repo.atualizar_item_processamento(
             int(item["id"]),
             status="processando",
@@ -559,6 +562,10 @@ class NameBatchRunner:
             concluido_em=__import__("datetime").datetime.now().isoformat(),
             erro=None,
         )
+        emitir("ocr.fast_finished", job_id=item.get("id"), registro_id=item.get("registro_id"),
+               lote_id=self.lote_id, duration_ms=round((time.perf_counter() - inicio) * 1000),
+               uncertain=status not in ("sugestao", "encaminhado_qwen"), sucesso=status != "sem_resultado",
+               motor="+".join(motores))
         limiar = float(self.settings.get("ocr", "name_qwen_threshold", 0.78))
         if status != "sugestao" or confianca < limiar:
             item["bbox_json"] = json.dumps(bbox)
@@ -575,6 +582,8 @@ class NameBatchRunner:
                 return
             except Exception as exc:
                 erro = str(exc)
+        emitir("job.failed", job_id=item.get("id"), registro_id=item.get("registro_id"),
+               lote_id=self.lote_id, etapa="ocr_fast", tentativas=2, erro_tipo=erro[:200])
         repo.atualizar_item_processamento(
             int(item["id"]),
             status="falhou",
@@ -663,6 +672,9 @@ class NameBatchRunner:
         recorte = recortar_bbox(image, bbox)
         if recorte is None or recorte.size == 0:
             raise RuntimeError("faixa Qwen do nome ficou vazia")
+        emitir("qwen.started", job_id=item.get("id"), registro_id=item.get("registro_id"),
+               lote_id=self.lote_id, etapa="qwen_nome")
+        inicio_qwen = time.perf_counter()
         nome_bruto, resultado = analisador.analisar_nome(recorte)
         nome = tratar_valor(nome_bruto)
         # Confirma novamente o hash e a associação antes de persistir.
@@ -738,6 +750,9 @@ class NameBatchRunner:
             concluido_em=__import__("datetime").datetime.now().isoformat(),
             erro=None,
         )
+        emitir("qwen.finished", job_id=item.get("id"), registro_id=item.get("registro_id"),
+               lote_id=self.lote_id, duration_ms=round((time.perf_counter() - inicio_qwen) * 1000),
+               sucesso=status != "sem_resultado", campos=1 if nome else 0)
 
     def _processar_qwen_com_retry(
         self, repo: Repository, analisador: QwenRecordAnalyzer, item: dict
@@ -752,6 +767,8 @@ class NameBatchRunner:
                 return
             except Exception as exc:
                 erro = str(exc)
+        emitir("job.failed", job_id=item.get("id"), registro_id=item.get("registro_id"),
+               lote_id=self.lote_id, etapa="qwen_nome", tentativas=2, erro_tipo=erro[:200])
         repo.atualizar_item_processamento(
             int(item["id"]),
             status="falhou",
@@ -771,6 +788,18 @@ class NameBatchRunner:
         try:
             repo.preparar_retomada_lote(self.lote_id)
             repo.marcar_lote_status(self.lote_id, "processando")
+
+            def _profundidade_fila() -> dict:
+                linha = repo.db.fetchone(
+                    """
+                    SELECT COUNT(*) AS n FROM processamento_item
+                    WHERE lote_id=? AND status IN ('pendente','processando')
+                    """,
+                    (self.lote_id,),
+                ) or {"n": 0}
+                return {"queue_depth": int(linha["n"])}
+
+            registrar_amostrador("fila_nomes", _profundidade_fila)
             pendentes = repo.listar_itens_processamento(
                 self.lote_id,
                 etapa="ocr_nome_rapido",
@@ -858,7 +887,22 @@ class NameBatchRunner:
                 status = "pausado"
             repo.marcar_lote_status(self.lote_id, status)
             resumo = repo.resumo_processamento(self.lote_id)
+            contagens = resumo.get("contagens") or {}
+            pendentes = sum(
+                int(n) for chave, n in contagens.items() if chave.endswith(":pendente")
+            )
+            processando = sum(
+                int(n) for chave, n in contagens.items() if chave.endswith(":processando")
+            )
+            falhas = sum(
+                int(n) for chave, n in contagens.items() if chave.endswith(":falhou")
+            )
+            emitir("lote.status", lote_id=self.lote_id, status=status,
+                   pendentes=pendentes, processando=processando,
+                   concluidos=max(0, int(resumo.get("itens") or 0) - pendentes - processando - falhas),
+                   falhas=falhas)
             self._emitir(repo, "Processamento pausado" if status == "pausado" else "Fila concluída")
             return resumo
         finally:
+            registrar_amostrador("fila_nomes", None)
             db.close()

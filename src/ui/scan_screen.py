@@ -14,6 +14,7 @@ from PySide6.QtWidgets import (
 from ..database.repository import Repository
 from ..session.scan_session import ScanSession
 from ..services.scan_pipeline import ScanPipeline
+from ..services.telemetry import emitir, registrar_amostrador
 from .term_search_dialog import TermSearchDialog
 from .camera_capture_dialog import CameraCaptureDialog
 from .image_viewer import ImageViewer
@@ -77,6 +78,11 @@ class ScanScreen(QWidget):
         self._ocr_queue: deque[int] = deque()
         self._captura_worker: CapturaPipelineWorker | None = None
         self._captura_queue: deque[str] = deque()
+
+        def _tamanhos_filas() -> dict:
+            return {"fila_ocr": len(self._ocr_queue), "fila_captura": len(self._captura_queue)}
+
+        registrar_amostrador("filas_ui", _tamanhos_filas)
         self._init_ui()
         self._atualizar_pendentes()
 

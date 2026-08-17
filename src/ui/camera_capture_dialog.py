@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from pathlib import Path
+import time
 from typing import Callable
 
 import cv2
@@ -20,6 +21,7 @@ from PySide6.QtWidgets import (
 )
 
 from ..capture.auto_capture import AutoCaptureController, FrameAnalysis
+from ..services.telemetry import emitir
 
 
 class CameraCaptureDialog(QDialog):
@@ -38,6 +40,14 @@ class CameraCaptureDialog(QDialog):
         self._cap = None
         self._frame = None
         self._controller = AutoCaptureController()
+        self._ultimo_status: str | None = None
+        self._estado_inicio = time.monotonic()
+        self._janela_inicio = time.monotonic()
+        self._janela_frames = 0
+        self._janela_detector_ms = 0.0
+        self._janela_save_ms = 0.0
+        self._janela_jitter_ms = 0.0
+        self._ultimo_tick = time.monotonic()
         self.setWindowTitle("Captura automatica por camera")
         self.setMinimumSize(1050, 760)
         self._init_ui(camera_index)
@@ -124,12 +134,39 @@ class CameraCaptureDialog(QDialog):
     def _atualizar_frame(self) -> None:
         if self._cap is None:
             return
+        agora = time.monotonic()
+        tick = agora - self._ultimo_tick
+        self._ultimo_tick = agora
+        self._janela_jitter_ms = max(self._janela_jitter_ms, tick * 1000)
         ok, frame = self._cap.read()
         if not ok or frame is None:
             self.status.setText("Falha ao ler a camera")
             return
         self._frame = frame
+        inicio_detector = time.perf_counter()
         analise = self._controller.analisar(frame)
+        self._janela_detector_ms = max(
+            self._janela_detector_ms, (time.perf_counter() - inicio_detector) * 1000
+        )
+        self._janela_frames += 1
+        if self._ultimo_status != analise.status:
+            emitir("capture.state", de=self._ultimo_status or "inicio",
+                   para=analise.status,
+                   duracao_estado_ms=round((agora - self._estado_inicio) * 1000))
+            self._ultimo_status = analise.status
+            self._estado_inicio = agora
+        if agora - self._janela_inicio >= 1.0:
+            duracao = agora - self._janela_inicio
+            emitir("capture.sample", fps_preview=round(self._janela_frames / duracao, 1),
+                   fps_analisado=round(self._janela_frames / duracao, 1),
+                   detector_ms_max=round(self._janela_detector_ms, 1),
+                   ui_jitter_ms_max=round(self._janela_jitter_ms, 1),
+                   contagem=self._janela_frames)
+            self._janela_inicio = agora
+            self._janela_frames = 0
+            self._janela_detector_ms = 0.0
+            self._janela_save_ms = 0.0
+            self._janela_jitter_ms = 0.0
         if analise.capturar:
             if self.automatica.isChecked():
                 self._salvar_captura(frame)
@@ -185,7 +222,12 @@ class CameraCaptureDialog(QDialog):
         self.capture_dir.mkdir(parents=True, exist_ok=True)
         nome = datetime.now().strftime("CAM_%Y%m%d_%H%M%S_%f.jpg")
         path = self.capture_dir / nome
-        if cv2.imwrite(str(path), frame, [cv2.IMWRITE_JPEG_QUALITY, 95]):
+        inicio = time.perf_counter()
+        ok = cv2.imwrite(str(path), frame, [cv2.IMWRITE_JPEG_QUALITY, 95])
+        duracao_ms = (time.perf_counter() - inicio) * 1000
+        self._janela_save_ms = max(self._janela_save_ms, duracao_ms)
+        emitir("capture.taken", duration_ms=round(duracao_ms, 1))
+        if ok:
             self.foto_capturada.emit(str(path))
 
     def closeEvent(self, event) -> None:

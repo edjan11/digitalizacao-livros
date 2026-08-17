@@ -34,6 +34,9 @@ def main() -> None:
     settings = Settings()
     if not settings.path.exists():
         settings.save()
+    from src.services.telemetry import configurar, iniciar_amostrador
+    configurar(settings)
+    iniciar_amostrador()
     janela = ConsultaMainWindow(settings)
     janela.show()
     sys.exit(app.exec())

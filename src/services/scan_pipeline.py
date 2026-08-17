@@ -379,6 +379,12 @@ class ScanPipeline:
             self.session.avancar_pagina(registros_na_face=registros_para_face)
         elapsed = (cv2.getTickCount() - t0) / cv2.getTickFrequency() * 1000
 
+        from .telemetry import emitir
+        emitir("capture.saved", imagem_id=imagem_id, duration_ms=round(elapsed, 1),
+               qualidade="repetir" if qualidade["repetir_captura"] else "ok",
+               duplicidade=dup["status"], bytes=int(armazenamento_result.output_size_bytes or 0)
+               if armazenamento_result else 0)
+
         return {
             "imagem_id": imagem_id,
             "phash": phash,
@@ -743,6 +749,12 @@ class ScanPipeline:
             tempo_ms=sum(tempos.values()),
             sucesso=True,
         )
+
+        from .telemetry import emitir
+        emitir("ocr.secondary_finished", imagem_id=imagem_id,
+               duration_ms=round(sum(tempos.values()), 1),
+               sucesso=True, motor=motor,
+               uncertain=bool(nomes_rapidos.get("incertos")))
 
         return {
             "imagem_id": imagem_id,

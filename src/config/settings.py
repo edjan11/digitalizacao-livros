@@ -124,6 +124,12 @@ class Settings:
             "host": "127.0.0.1",
             "port": 8765,
         },
+        "telemetry": {
+            # Eventos de desempenho em JSONL (sem imagem, sem texto, sem PII).
+            # Desligar aqui nao altera nenhuma funcionalidade.
+            "enabled": True,
+            "path": "",
+        },
     }
 
     def __init__(self, path: Path | None = None) -> None:
