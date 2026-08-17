@@ -1,0 +1,18 @@
+{
+  "id": "M4-T04",
+  "milestone": "M4",
+  "objective": "Fechar o M4: testes offscreen do painel (resumo, filtros, vazio/pronto, conferido persistido), suite completa, relatorio milestone_M4.md, STATE, DECISIONS (D-017).",
+  "context_files": ["ai/reports/milestone_M3.md", "ai/STATE.json"],
+  "allowed_files": ["ai/reports/milestone_M4.md", "ai/STATE.json", "ai/DECISIONS.md", "ai/ROADMAP.md", "tests/test_captura_automatica.py"],
+  "acceptance_criteria": [
+    "Suite completa verde",
+    "Testes offscreen do painel cobrindo resumo, filtros e livro pronto",
+    "Relatorio M4 com UX descrita e riscos",
+    "DECISIONS com D-017 (painel de conferencia por livro)"
+  ],
+  "test_commands": ["pytest -q"],
+  "risk": "baixo",
+  "rollback": "git checkout ai/",
+  "context_budget_tokens": 1500,
+  "notes": "PARAR para revisao antes de M5."
+}

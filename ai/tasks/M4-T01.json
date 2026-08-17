@@ -1,0 +1,18 @@
+{
+  "id": "M4-T01",
+  "milestone": "M4",
+  "objective": "Dados por livro para a conferencia: listar_revisoes_pendentes com filtro de livro, resumo_conferencia_livro (esperadas/capturadas/aprovadas/revisar/recapturar/faltantes + por motivo) e coluna livro.conferido_em com marcacao.",
+  "context_files": ["src/database/repository.py", "src/database/connection.py"],
+  "allowed_files": ["src/database/repository.py", "src/database/connection.py", "tests/test_consulta.py"],
+  "acceptance_criteria": [
+    "listar_revisoes_pendentes(livro_id=None) filtra por livro sem quebrar chamadas existentes",
+    "resumo_conferencia_livro(livro_id) retorna contagens corretas (testes)",
+    "Migracao adiciona livro.conferido_em (padrao PRAGMA existente); marcar_livro_conferido/livro_conferido",
+    "Suite existente verde"
+  ],
+  "test_commands": ["pytest tests/test_consulta.py -q"],
+  "risk": "medio",
+  "rollback": "git revert do commit da task",
+  "context_budget_tokens": 2500,
+  "notes": "Nova coluna segue o padrao de conexao atual; nao altera dados existentes."
+}

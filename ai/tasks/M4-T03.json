@@ -1,0 +1,18 @@
+{
+  "id": "M4-T03",
+  "milestone": "M4",
+  "objective": "Integrar o painel no Digitalizador: botao 'Conferir livro' no scan_screen (contador + cor por gravidade) e badge 'Conferido' no seletor de livro.",
+  "context_files": ["src/ui/scan_screen.py", "src/ui/book_selector.py", "src/ui/main_window.py"],
+  "allowed_files": ["src/ui/scan_screen.py", "src/ui/book_selector.py", "src/ui/main_window.py"],
+  "acceptance_criteria": [
+    "Botao 'Conferir livro' com contador (vermelho se recapturas, laranja se revisoes)",
+    "Abre BookReviewDialog com o livro da sessao; ao fechar, contador atualiza",
+    "Seletor de livro mostra 'Conferido' quando livro.conferido_em preenchido",
+    "Suite verde"
+  ],
+  "test_commands": ["pytest tests/test_captura_automatica.py tests/test_consulta.py -q"],
+  "risk": "baixo",
+  "rollback": "git revert do commit da task",
+  "context_budget_tokens": 2200,
+  "notes": "Apenas Digitalizador; ConsultaAcervo intocada."
+}

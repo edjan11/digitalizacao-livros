@@ -1,0 +1,19 @@
+{
+  "id": "M4-T02",
+  "milestone": "M4",
+  "objective": "BookReviewDialog: painel de conferencia por livro com cabecalho (progresso + chips), filtros por tipo, cartoes folha+face+termos com ABRIR FOTO/RECAPTURAR/IGNORAR e estado 'Livro pronto'. Refatorar helpers de refoto do ReviewDialog para reuso sem regressao.",
+  "context_files": ["src/ui/review_dialog.py", "src/ui/scan_screen.py", "src/ui/image_viewer.py"],
+  "allowed_files": ["src/ui/review_dialog.py", "src/ui/book_review_dialog.py (novo)", "tests/test_captura_automatica.py"],
+  "acceptance_criteria": [
+    "Cabecalho com barra de progresso e chips (Aprovadas/Revisar/Recapturar/Faltantes)",
+    "Filtros por tipo funcionando; cartoes com miniatura, motivo e acoes",
+    "ABRIR FOTO usa ImageViewer (zoom/pan); RECAPTURAR reutiliza fluxo existente; IGNORAR resolve",
+    "Rodape: 'Livro pronto' + 'Fechar e marcar conferido' habilitado so com zero pendencias",
+    "ReviewDialog antigo intacto (suite verde)"
+  ],
+  "test_commands": ["pytest tests/test_captura_automatica.py -q"],
+  "risk": "medio",
+  "rollback": "git revert do commit da task",
+  "context_budget_tokens": 3000,
+  "notes": "UX testavel offscreen; nenhuma alteracao na ConsultaAcervo."
+}
