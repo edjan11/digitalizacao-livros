@@ -1,0 +1,18 @@
+{
+  "id": "M3-T02",
+  "milestone": "M3",
+  "objective": "Benchmark heuristica atual (pontuacao_mao) vs MediaPipe Hand Landmarker em frames sinteticos realistas (e reais se camera disponivel). Decisao documentada: instalar mediapipe em producao apenas se vencer em precisao E custo CPU E compatibilidade PyInstaller.",
+  "context_files": ["src/capture/auto_capture.py", "ai/reports/dependency_audit.md"],
+  "allowed_files": ["scripts/benchmark_mao.py (novo)", "ai/reports/dependency_audit.md", "ai/reports/milestone_M3.md", "ai/DECISIONS.md"],
+  "acceptance_criteria": [
+    "Script reproduzivel comparando: acerto (mao presente/ausente), custo ms/frame, memoria",
+    "Cenarios: sem mao, mao clara/escura, punho, mao parcial, dedos na borda",
+    "Decisao final registrada com numeros; se nao vencer, mediapipe NAO entra e permanece ausente",
+    "Se mediapipe for instalado para o experimento, fica documentado como temporario e desinstalado se reprovado"
+  ],
+  "test_commands": ["python scripts/benchmark_mao.py"],
+  "risk": "baixo",
+  "rollback": "pip uninstall mediapipe; git checkout scripts/",
+  "context_budget_tokens": 2200,
+  "notes": "Experimento isolado; regra de producao (heuristica atual) permanece ate a decisao."
+}

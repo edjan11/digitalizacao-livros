@@ -1,0 +1,18 @@
+{
+  "id": "M3-T01",
+  "milestone": "M3",
+  "objective": "Detectar reflexo/glare em quality.py com OpenCV (novo, gap do M0) e integrar ao avaliar_qualidade: foto com reflexo forte vira 'repetir_captura'.",
+  "context_files": ["src/imaging/quality.py", "tests/test_captura_automatica.py"],
+  "allowed_files": ["src/imaging/quality.py", "tests/test_captura_automatica.py"],
+  "acceptance_criteria": [
+    "detectar_glare(image) retorna (grau, motivo) com 'ok'/'aviso'/'reflexo_forte'",
+    "Reflexo forte (blob claro > X%% da imagem com contraste local baixo) entra em motivos_refazer",
+    "Paginas normais reais do A-07 nao disparam falso positivo (validado em amostra de fotos reais)",
+    "Testes sinteticos (glare adicionado) e reais cobertos"
+  ],
+  "test_commands": ["pytest tests/test_captura_automatica.py -q"],
+  "risk": "medio",
+  "rollback": "git revert do commit da task",
+  "context_budget_tokens": 2200,
+  "notes": "Apenas leitura; nenhuma foto alterada. Nao tocar limiares existentes sem necessidade."
+}

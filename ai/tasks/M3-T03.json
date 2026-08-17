@@ -1,0 +1,18 @@
+{
+  "id": "M3-T03",
+  "milestone": "M3",
+  "objective": "Fechar o M3: suite completa verde, relatorio ai/reports/milestone_M3.md, STATE.json e DECISIONS.md atualizados (glare + decisao de maos).",
+  "context_files": ["ai/reports/milestone_M2.md", "ai/STATE.json"],
+  "allowed_files": ["ai/reports/milestone_M3.md", "ai/STATE.json", "ai/DECISIONS.md", "ai/ROADMAP.md"],
+  "acceptance_criteria": [
+    "Suite completa verde registrada",
+    "Relatorio M3: glare validado (amostra real), decisao de maos com numeros",
+    "DECISIONS.md com D-015 (glare) e D-016 (decisao de maos)",
+    "STATE.json fase M3 concluida"
+  ],
+  "test_commands": ["pytest -q"],
+  "risk": "baixo",
+  "rollback": "git checkout ai/",
+  "context_budget_tokens": 1500,
+  "notes": "Entregar e PARAR para revisao antes de M4."
+}
