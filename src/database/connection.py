@@ -471,6 +471,7 @@ class Database:
             ("layout_confidence", "REAL"),
             ("layout_method", "TEXT"),
             ("layout_reason", "TEXT"),
+            ("conferido_em", "TEXT"),
         ):
             if coluna not in colunas_livro:
                 self._conn.execute(f"ALTER TABLE livro ADD COLUMN {coluna} {definicao}")

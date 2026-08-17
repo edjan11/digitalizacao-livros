@@ -185,21 +185,90 @@ class Repository:
         row = self.db.fetchone("SELECT COUNT(*) as cnt FROM revisao WHERE resolvida=0")
         return row["cnt"] if row else 0
 
-    def listar_revisoes_pendentes(self) -> list[dict]:
+    def listar_revisoes_pendentes(self, livro_id: int | None = None) -> list[dict]:
+        condicao = ""
+        params: list[Any] = []
+        if livro_id is not None:
+            condicao = "WHERE r.resolvida=0 AND i.livro_id=?"
+            params.append(int(livro_id))
+        else:
+            condicao = "WHERE r.resolvida=0"
         return self.db.fetchall(
-            """
+            f"""
             SELECT r.*,
                    i.livro_id, i.caminho_original, i.caminho_thumb,
                    i.folha_estimada, i.face, i.termo_inicial, i.termo_final,
                    i.ordem_captura
             FROM revisao r
             LEFT JOIN imagem i ON i.id=r.imagem_id
-            WHERE r.resolvida=0
+            {condicao}
             ORDER BY
                 CASE WHEN r.tipo='refazer_captura' THEN 0 ELSE 1 END,
                 r.created_at DESC
-            """
+            """,
+            tuple(params),
         )
+
+    def resumo_conferencia_livro(self, livro_id: int) -> dict:
+        """Contagens para o painel de conferencia de um livro."""
+        livro_id = int(livro_id)
+        livro = self.get_livro(livro_id) or {}
+        esperadas_folhas = max(0, int(livro.get("total_folhas") or 0))
+        faces_por_folha = 2 if livro.get("frente_verso") else 1
+        esperadas_faces = esperadas_folhas * faces_por_folha
+
+        linhas = self.db.fetchall(
+            """
+            SELECT tipo, COUNT(*) AS n
+            FROM revisao r JOIN imagem i ON i.id=r.imagem_id
+            WHERE r.resolvida=0 AND i.livro_id=?
+            GROUP BY tipo
+            """,
+            (livro_id,),
+        )
+        por_tipo = {str(row["tipo"]): int(row["n"]) for row in linhas}
+        recapturar = sum(
+            int(n) for tipo, n in por_tipo.items()
+            if tipo in ("refazer_captura", "qualidade")
+        )
+        revisar = sum(
+            int(n) for tipo, n in por_tipo.items()
+            if tipo not in ("refazer_captura", "qualidade")
+        )
+        capturadas = int((self.db.fetchone(
+            """
+            SELECT COUNT(*) AS n FROM imagem
+            WHERE livro_id=? AND duplicidade_status!='duplicata_confirmada'
+              AND tipo_documento='registro'
+            """,
+            (livro_id,),
+        ) or {"n": 0})["n"])
+        aprovadas = max(0, capturadas - recapturar)
+        return {
+            "livro_id": livro_id,
+            "total_folhas": esperadas_folhas,
+            "esperadas_faces": esperadas_faces,
+            "capturadas": capturadas,
+            "aprovadas": aprovadas,
+            "revisar": revisar,
+            "recapturar": recapturar,
+            "faltantes": max(0, esperadas_faces - capturadas),
+            "por_tipo": por_tipo,
+            "conferido_em": livro.get("conferido_em"),
+        }
+
+    def marcar_livro_conferido(self, livro_id: int, quando: str | None = None) -> None:
+        agora = quando or __import__("datetime").datetime.now().isoformat(timespec="seconds")
+        self.db.update(
+            "UPDATE livro SET conferido_em=? WHERE id=?",
+            (agora, int(livro_id)),
+        )
+
+    def livro_conferido(self, livro_id: int) -> bool:
+        row = self.db.fetchone(
+            "SELECT conferido_em FROM livro WHERE id=?", (int(livro_id),)
+        )
+        return bool(row and row.get("conferido_em"))
 
     def tem_revisao_pendente(self, imagem_id: int, tipo: str | None = None) -> bool:
         if tipo is None:
