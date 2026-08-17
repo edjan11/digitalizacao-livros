@@ -1,21 +1,19 @@
 {
   "project": "digitalizacao-livros",
-  "phase": "M2",
+  "phase": "M3",
   "status": "concluido",
-  "baseline": "90 passed in 412.14s (2026-08-16)",
-  "git": "ultimo commit 17ddac1",
-  "current_task": "M2-T04 (fechamento do milestone)",
-  "last_tests": "90 passed",
-  "next_action": "aguardando aprovacao do M3",
+  "baseline": "92 passed in 286.68s (2026-08-16)",
+  "git": "ultimo commit e15c8d0 (glare); benchmark de maos em scripts/",
+  "current_task": "M3-T03 (fechamento do milestone)",
+  "last_tests": "92 passed",
+  "next_action": "aguardando aprovacao do M4 (painel fim-de-livro)",
   "telemetry": "ativa — aguardando sessao real do operador para capture.sample",
   "open_risks": [
-    "glare/reflexo nao detectado (M3)",
-    "FPS/jitter reais da camera nao medidos",
-    "folha nova muito parecida em enquadramento identico pode ficar bloqueada (falso negativo raro)",
-    "mesma folha recolocada em posicao bem diferente pode virar duplicata (mitigada pela duplicidade)"
+    "FPS/jitter reais da camera nao coletados",
+    "mao heuristica pode falhar com tons extremos/dedos finos (reavaliacao documentada)",
+    "glare com cobertura >95%% fica como aviso (deliberado)"
   ],
   "pending_decisions": [
-    "M3: glare + benchmark de maos com frames reais",
-    "M4/M5: painel fim-de-livro e recaptura por folha"
+    "M4: painel fim-de-livro (aprovadas/revisar/recapturar por motivo)"
   ]
 }

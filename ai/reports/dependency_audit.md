@@ -7,7 +7,7 @@ a necessidade. Estado verificado por `importlib.import_module` no `.venv`.
 
 | Pacote | Instalada? | Necessidade | Benefício | Risco | PyInstaller | Decisão |
 |---|---|---|---|---|---|---|
-| `mediapipe` | Não | M3: mão/oclusão na captura | Landmarks de mão robustos vs heurística atual | Modelo ~+peso, instalação grande, GIL, versão p/ Py 3.11/Windows | Médio (binários .dll) | **Adiar** — só instalar se benchmark (heurística vs MediaPipe em frames reais) vencer |
+| `mediapipe` | Não (experimento em M3, desinstalado) | M3: mão/oclusão na captura | Landmarks de mão robustos vs heurística atual | Benchmark M3-T02: 1/9 acertos nos cenários (blocos de pele não são mãos anatômicas), 24,7 ms/frame vs 8,2 ms da heurística; PyInstaller complexo | Médio (binários) | **Rejeitado em M3** — heurística 8/9 vence no conjunto; reavaliar apenas com frames reais de mãos (dedos finos) |
 | `pytest-qt` | Não | M6: testar widgets PySide6 | Asserts de UI com event loop | Mais setup de teste; offscreen já cobre muito | n/d (dev) | **Adiar** até M6 (UX) |
 | `pytest-timeout` | Não | M1: deadlock em worker/fila | Timeout automático por teste | Baixo (dev-only) | n/d (dev) | **Adiar** para M1 (será a primeira a entrar, se M1 aprovar) |
 | `ruff` | Não | Lint consistente | Padronização rápida | Baixo (dev-only) | n/d (dev) | **Adiar** — opcional, sem urgência |

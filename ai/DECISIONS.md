@@ -66,3 +66,13 @@
 - Cooldown destrava apenas com página nova presente e estável por `tempo_troca`
   (0,6 s). Frame sem página ou mesma folha → permanece bloqueado. Páginas
   sintéticas dos testes agora simulam enquadramento real (diferença por seed).
+
+## D-015 · Detecção de reflexo/glare (M3)
+- `detectar_glare` em quality.py: blob compacto lavado (≥248, desvio local <12).
+  `reflexo_forte` entra em `motivos_refazer`. Validado: 637/637 fotos reais sem
+  falso positivo; sintético cobre forte/aviso.
+
+## D-016 · Mãos: manter heurística, rejeitar MediaPipe (M3)
+- Benchmark sintético: heurística 8/9 vs MediaPipe 1/9, custo 8,2 ms vs 24,7 ms.
+- MediaPipe instalado só para o experimento e desinstalado. Reavaliar apenas com
+  frames reais de mãos (dedos finos) se o operador reportar falsos negativos.
