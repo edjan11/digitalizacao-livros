@@ -88,4 +88,4 @@ def test_amostrador_registrado_e_chamado(tmp_path):
     linhas = _linhas_eventos(tmp_path)
     amostras = [l for l in linhas if l["event"] == "resource.sample"]
     assert chamadas, "amostrador nunca foi chamado"
-    assert amostras and any(l.get("fila_teste") == 5 for l in amostras)
+    assert amostras and any(l.get("queue_depth") == 5 for l in amostras)
