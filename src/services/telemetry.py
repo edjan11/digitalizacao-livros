@@ -7,14 +7,14 @@ Invariante 13: telemetria nunca altera o que mede.
 - sem OCR/texto sensível/dados pessoais: apenas identificadores técnicos
   (ids, durações, contagens, flags) em uma allowlist;
 - sem log por frame: eventos de transição + amostras periódicas (~1 Hz);
-- sem I/O síncrono pesado no caminho crítico: `QueueHandler` + `QueueListener`
-  escrevem em thread própria.
+- sem I/O síncrono pesado no caminho crítico: uma fila `queue.Queue` recebe os
+  eventos e uma thread própria escreve o JSONL.
 
 Uso típico:
-    from ..services.telemetry import emit, configurar, iniciar_amostrador
+    from ..services.telemetry import emitir, configurar, iniciar_amostrador
     configurar(settings)
     iniciar_amostrador()
-    emit("ocr.fast_finished", job_id=..., duration_ms=..., uncertain=True)
+    emitir("ocr.fast_finished", job_id=..., duration_ms=..., uncertain=True)
 """
 
 from __future__ import annotations
@@ -76,12 +76,16 @@ def _sanitizar(campos: dict[str, Any]) -> dict[str, Any]:
     return saida
 
 
-def _loop_escritor() -> None:
-    """Escreve os eventos em thread própria: o I/O nunca toca o caminho crítico."""
+def _loop_escritor(fila: "queue.Queue[str]") -> None:
+    """Escreve os eventos em thread própria: o I/O nunca toca o caminho crítico.
+
+    A fila é recebida por argumento (nunca lida do estado global) para que
+    ``parar()`` possa encerrar o ciclo sem janelas de corrida.
+    """
     stream = None
     try:
         while True:
-            item = _fila.get()
+            item = fila.get()
             if item is _SENTINELA:
                 break
             if stream is None:
@@ -114,9 +118,11 @@ def configurar(settings, caminho: str | Path | None = None) -> None:
             return
         if _configurado and _ativo and _caminho == destino:
             return
-        _fila = queue.Queue()
+        nova_fila: "queue.Queue[str]" = queue.Queue()
+        _fila = nova_fila
         _escritor_thread = threading.Thread(
-            target=_loop_escritor, name="telemetry-writer", daemon=True
+            target=_loop_escritor, args=(nova_fila,),
+            name="telemetry-writer", daemon=True,
         )
         _escritor_thread.start()
         _caminho = destino
@@ -196,13 +202,17 @@ def iniciar_amostrador(intervalo: float = 1.0) -> None:
 
 def parar() -> None:
     """Encerra a amostragem e esvazia a fila de eventos (usar no fim do app/teste)."""
-    global _ativo, _fila
+    global _ativo, _fila, _escritor_thread
     with _travamento:
         _ativo = False
         fila = _fila
         _fila = None
+        escritor = _escritor_thread
+        _escritor_thread = None
     if fila is not None:
         try:
             fila.put_nowait(_SENTINELA)
         except Exception:
             pass
+    if escritor is not None and escritor.is_alive():
+        escritor.join(timeout=2.0)

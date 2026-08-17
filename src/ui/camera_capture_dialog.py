@@ -160,6 +160,7 @@ class CameraCaptureDialog(QDialog):
             emitir("capture.sample", fps_preview=round(self._janela_frames / duracao, 1),
                    fps_analisado=round(self._janela_frames / duracao, 1),
                    detector_ms_max=round(self._janela_detector_ms, 1),
+                   save_ms_max=round(self._janela_save_ms, 1),
                    ui_jitter_ms_max=round(self._janela_jitter_ms, 1),
                    contagem=self._janela_frames)
             self._janela_inicio = agora

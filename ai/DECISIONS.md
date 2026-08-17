@@ -41,3 +41,19 @@
 ## D-009 · Loops de LLM externos (Deep Code CLI) adiados
 - Plano avaliado (documentação oficial confirmada), mas a execução ocorre via
   opencode nesta sessão — mesmo protocolo, zero instalação/custo.
+
+## D-010 · Telemetria event-based (M1)
+- Eventos JSONL assíncronos (`queue.Queue` + thread de escrita), amostras ~1 Hz,
+  allowlist técnica (ids/durações/contagens) e proibição de PII/imagem/texto.
+- Desligável via `telemetry.enabled`. Invariante 13. Escrita jamais no caminho crítico.
+
+## D-011 · Achado M1: oscilação do detector pode recapturar a mesma folha
+- Caracterização (M1-T03) documentou que um frame sem página durante o cooldown
+  destrava o bloqueio de cena; se a MESMA folha voltar, a captura é liberada de novo
+  (potencial duplicata). Comportamento atual preservado no M1 (observacional);
+  **candidata a correção no M2**. Teste: `test_detector_oscilando_pode_liberar_recaptura_da_mesma_folha`.
+
+## D-012 · Stress da topologia atual (M1-T04)
+- Confirmado por medição: fila/lock/retomada com overhead desprezível (~0,3 s/item
+  frente a 16–48 s de inferência), RSS estável (~40 MB), kill+retomada sem
+  duplicidade/perda, 2 workers bloqueados pelo lock. Topologia NÃO muda.

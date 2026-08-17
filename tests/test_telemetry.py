@@ -89,3 +89,23 @@ def test_amostrador_registrado_e_chamado(tmp_path):
     amostras = [l for l in linhas if l["event"] == "resource.sample"]
     assert chamadas, "amostrador nunca foi chamado"
     assert amostras and any(l.get("queue_depth") == 5 for l in amostras)
+
+
+def test_ciclos_repetidos_parar_configurar_sem_corrida(tmp_path):
+    """Regressao da auditoria M1: o escritor recebe a fila por argumento e o
+    parar() faz join; ciclos repetidos nao perdem eventos nem deixam thread morta."""
+    settings = Settings(tmp_path / "config.yaml")
+    settings.set("telemetry", "enabled", True)
+    settings.set("telemetry", "path", str(tmp_path))
+
+    for ciclo in range(5):
+        telemetry.configurar(settings)
+        telemetry.emitir("ciclo.evento", job_id=ciclo, duration_ms=1.0)
+        time.sleep(0.05)
+        telemetry.parar()
+    time.sleep(0.2)
+
+    linhas = _linhas_eventos(tmp_path)
+    eventos = [l for l in linhas if l["event"] == "ciclo.evento"]
+    assert len(eventos) == 5
+    assert sorted(l["job_id"] for l in eventos) == [0, 1, 2, 3, 4]
