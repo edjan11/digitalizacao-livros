@@ -225,6 +225,7 @@ class BookReviewDialog(QDialog):
 
     def _criar_card(self, revisao: dict) -> QFrame:
         card = QFrame()
+        card.setObjectName("card_pendencia")
         card.setStyleSheet(
             "QFrame { border: 1px solid #e0e0e0; border-radius: 6px; "
             "background: white; margin: 4px; }"
