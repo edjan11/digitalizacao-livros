@@ -211,7 +211,8 @@ class BookSelector(QWidget):
         )
         for livro in livros:
             status_emoji = "OK" if livro["status"] == "concluido" else ">"
-            btn = QPushButton(f"{status_emoji}  {livro['codigo'] or 'Sem codigo'} - {livro['nome_capa'] or 'Sem nome'}")
+            conferido = "  [Conferido]" if livro.get("conferido_em") else ""
+            btn = QPushButton(f"{status_emoji}  {livro['codigo'] or 'Sem codigo'} - {livro['nome_capa'] or 'Sem nome'}{conferido}")
             btn.setMinimumHeight(50)
             btn.setStyleSheet(
                 "QPushButton { font-size: 13px; border: 1px solid #9e9e9e; border-radius: 6px; "

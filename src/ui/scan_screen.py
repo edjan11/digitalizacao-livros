@@ -15,6 +15,7 @@ from ..database.repository import Repository
 from ..session.scan_session import ScanSession
 from ..services.scan_pipeline import ScanPipeline
 from ..services.telemetry import emitir, registrar_amostrador
+from .book_review_dialog import BookReviewDialog
 from .term_search_dialog import TermSearchDialog
 from .camera_capture_dialog import CameraCaptureDialog
 from .image_viewer import ImageViewer
@@ -104,6 +105,17 @@ class ScanScreen(QWidget):
         )
         self.lbl_pendentes.clicked.connect(self.revisao_clicked.emit)
         header.addWidget(self.lbl_pendentes)
+        btn_conferir = QPushButton("Conferir livro")
+        btn_conferir.setStyleSheet(
+            "QPushButton { background: #2e7d32; color: white; border-radius: 4px; "
+            "padding: 4px 12px; font-weight: bold; }"
+            "QPushButton:hover { background: #1b5e20; }"
+        )
+        btn_conferir.setToolTip(
+            "Resumo do livro: aprovadas, revisões, fotos a refazer e faltantes."
+        )
+        btn_conferir.clicked.connect(self._abrir_conferencia)
+        header.addWidget(btn_conferir)
         btn_buscar = QPushButton("Buscar termo")
         btn_buscar.setStyleSheet(
             "QPushButton { background: #1976d2; color: white; border-radius: 4px; "
@@ -436,6 +448,17 @@ class ScanScreen(QWidget):
             self.lbl_pendentes.setStyleSheet(
                 "QPushButton { background: #9e9e9e; color: white; border-radius: 4px; padding: 4px 12px; font-weight: bold; }"
             )
+
+    def _abrir_conferencia(self) -> None:
+        livro_id = self.session.livro_id
+        if not livro_id:
+            QMessageBox.information(
+                self, "Conferir livro", "Selecione um livro antes de conferir."
+            )
+            return
+        dlg = BookReviewDialog(self.repo, self.pipeline, int(livro_id), self)
+        dlg.exec()
+        self._atualizar_pendentes()
 
     def _on_voltar(self) -> None:
         self.voltar_clicked.emit()

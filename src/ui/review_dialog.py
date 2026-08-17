@@ -17,6 +17,113 @@ from .camera_capture_dialog import CameraCaptureDialog
 logger = logging.getLogger(__name__)
 
 
+TIPO_NOMES = {
+    "refazer_captura": "REFAZER FOTOGRAFIA",
+    "duplicidade": "Possivel duplicidade",
+    "qualidade": "Problema de qualidade",
+    "termo_incerto": "Termo incerto",
+    "folha_incerta": "Folha incerta",
+    "ocr_falha": "OCR não conseguiu ler",
+    "classificar_documento": "Confirmar tipo do documento",
+    "nome_incerto": "NOME INCERTO — corrigir com Qwen",
+}
+
+TIPO_CORES = {
+    "refazer_captura": "#d84315",
+    "duplicidade": "#f44336",
+    "qualidade": "#ff9800",
+    "termo_incerto": "#2196f3",
+    "folha_incerta": "#9c27b0",
+    "ocr_falha": "#c62828",
+    "classificar_documento": "#6a1b9a",
+    "nome_incerto": "#6a1b9a",
+}
+
+
+def contexto_refoto(revisao: dict) -> str:
+    """Texto de contexto usado pela camera de refotografia."""
+    folha = revisao.get("folha_estimada") or "?"
+    face = (revisao.get("face") or "indeterminada").capitalize()
+    termo_i, termo_f = revisao.get("termo_inicial"), revisao.get("termo_final")
+    faixa = "?" if termo_i is None else (
+        str(termo_i) if termo_i == termo_f else f"{termo_i}-{termo_f}"
+    )
+    return f"REFAZER: folha {folha} - {face} - termos {faixa}"
+
+
+def rotulo_revisao(revisao: dict) -> str:
+    """Rotulo principal de um cartao de revisao."""
+    tipo = revisao.get("tipo", "desconhecido")
+    if tipo == "refazer_captura":
+        folha = revisao.get("folha_estimada") or "?"
+        face = (revisao.get("face") or "indeterminada").capitalize()
+        termo_i = revisao.get("termo_inicial")
+        termo_f = revisao.get("termo_final")
+        faixa = "?" if termo_i is None else (
+            str(termo_i) if termo_i == termo_f else f"{termo_i}-{termo_f}"
+        )
+        return f"REFAZER - Folha {folha} - {face} - Termos {faixa}"
+    return TIPO_NOMES.get(tipo, tipo)
+
+
+def aplicar_refoto(dialog, pipeline, revisao: dict, path: str, on_aplicado=None) -> None:
+    """Substitui a captura de uma revisao e reavalia qualidade/OCR.
+
+    ``on_aplicado`` (opcional) e chamado ao final para recarregar a lista.
+    """
+    if pipeline is None:
+        return
+    resultado = pipeline.substituir_captura(
+        revisao["imagem_id"], revisao["id"], path
+    )
+    if resultado.get("erro"):
+        QMessageBox.warning(dialog, "Nao foi possivel substituir", resultado["erro"])
+    elif resultado.get("substituida"):
+        ocr = pipeline.processar_ocr_secundario(resultado["imagem_id"])
+        complemento = (
+            "\nO OCR da nova fotografia foi processado e salvo."
+            if not ocr.get("erro")
+            else f"\nA fotografia foi salva, mas o OCR apontou erro: {ocr['erro']}"
+        )
+        QMessageBox.information(
+            dialog,
+            "Fotografia substituida",
+            f"{contexto_refoto(revisao)} foi corrigida sem alterar a contagem."
+            f"{complemento}",
+        )
+    else:
+        motivos = ", ".join(resultado["qualidade"].get("motivos_refazer", []))
+        QMessageBox.warning(
+            dialog,
+            "A nova foto ainda precisa ser refeita",
+            f"Ela continuara na lista: {motivos}",
+        )
+    if on_aplicado is not None:
+        on_aplicado()
+
+
+def abrir_camera_refoto(dialog, pipeline, revisao: dict, on_aplicado=None) -> None:
+    """Abre a camera de refotografia e aplica a nova foto quando capturada."""
+    if pipeline is None:
+        return
+    livro_id = revisao.get("livro_id")
+    pasta = pipeline.acervo_root / f"livro_{livro_id}" / "refotos_camera"
+    indice = pipeline.settings.get("camera", "index", 0) if pipeline.settings else 0
+    dlg = CameraCaptureDialog(
+        pasta,
+        lambda: contexto_refoto(revisao),
+        indice,
+        dialog,
+    )
+
+    def receber(path: str) -> None:
+        dlg.accept()
+        aplicar_refoto(dialog, pipeline, revisao, path, on_aplicado)
+
+    dlg.foto_capturada.connect(receber)
+    dlg.exec()
+
+
 class ReviewDialog(QDialog):
     def __init__(self, repo: Repository, pipeline: ScanPipeline | None = None, parent=None) -> None:
         super().__init__(parent)
@@ -70,40 +177,11 @@ class ReviewDialog(QDialog):
         layout = QVBoxLayout(card)
 
         tipo = revisao.get("tipo", "desconhecido")
-        tipo_nomes = {
-            "refazer_captura": "REFAZER FOTOGRAFIA",
-            "duplicidade": "Possivel duplicidade",
-            "qualidade": "Problema de qualidade",
-            "termo_incerto": "Termo incerto",
-            "folha_incerta": "Folha incerta",
-            "ocr_falha": "OCR não conseguiu ler",
-            "classificar_documento": "Confirmar tipo do documento",
-            "nome_incerto": "NOME INCERTO — corrigir com Qwen",
-        }
-        if tipo == "refazer_captura":
-            folha = revisao.get("folha_estimada") or "?"
-            face = (revisao.get("face") or "indeterminada").capitalize()
-            termo_i = revisao.get("termo_inicial")
-            termo_f = revisao.get("termo_final")
-            faixa = "?" if termo_i is None else (
-                str(termo_i) if termo_i == termo_f else f"{termo_i}-{termo_f}"
-            )
-            nome_tipo = f"REFAZER - Folha {folha} - {face} - Termos {faixa}"
-        else:
-            nome_tipo = tipo_nomes.get(tipo, tipo)
+        nome_tipo = rotulo_revisao(revisao)
 
         header = QLabel(nome_tipo)
         header.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
-        color = {
-            "refazer_captura": "#d84315",
-            "duplicidade": "#f44336",
-            "qualidade": "#ff9800",
-            "termo_incerto": "#2196f3",
-            "folha_incerta": "#9c27b0",
-            "ocr_falha": "#c62828",
-            "classificar_documento": "#6a1b9a",
-            "nome_incerto": "#6a1b9a",
-        }.get(tipo, "#757575")
+        color = TIPO_CORES.get(tipo, "#757575")
         header.setStyleSheet(f"color: {color};")
         layout.addWidget(header)
 
@@ -152,40 +230,8 @@ class ReviewDialog(QDialog):
         self.repo.resolver_revisao(revisao_id)
         self._carregar()
 
-    @staticmethod
-    def _contexto_refoto(revisao: dict) -> str:
-        folha = revisao.get("folha_estimada") or "?"
-        face = (revisao.get("face") or "indeterminada").capitalize()
-        termo_i, termo_f = revisao.get("termo_inicial"), revisao.get("termo_final")
-        faixa = "?" if termo_i is None else (
-            str(termo_i) if termo_i == termo_f else f"{termo_i}-{termo_f}"
-        )
-        return f"REFAZER: folha {folha} - {face} - termos {faixa}"
-
     def _abrir_camera_refoto(self, revisao: dict) -> None:
-        if self.pipeline is None:
-            return
-        livro_id = revisao.get("livro_id")
-        pasta = self.pipeline.acervo_root / f"livro_{livro_id}" / "refotos_camera"
-        indice = self.pipeline.settings.get("camera", "index", 0) if self.pipeline.settings else 0
-        dlg = CameraCaptureDialog(
-            pasta,
-            lambda: self._contexto_refoto(revisao),
-            indice,
-            self,
-        )
-        self._camera_refoto = dlg
-        dlg.foto_capturada.connect(
-            lambda path: self._receber_refoto_camera(revisao, path, dlg)
-        )
-        dlg.exec()
-        self._camera_refoto = None
-
-    def _receber_refoto_camera(
-        self, revisao: dict, path: str, dialog: CameraCaptureDialog
-    ) -> None:
-        dialog.accept()
-        self._aplicar_refoto(revisao, path)
+        abrir_camera_refoto(self, self.pipeline, revisao, on_aplicado=self._carregar)
 
     def _escolher_refoto(self, revisao: dict) -> None:
         path, _ = QFileDialog.getOpenFileName(
@@ -195,34 +241,4 @@ class ReviewDialog(QDialog):
             "Imagens (*.jpg *.jpeg *.png *.tif *.tiff *.bmp)",
         )
         if path:
-            self._aplicar_refoto(revisao, path)
-
-    def _aplicar_refoto(self, revisao: dict, path: str) -> None:
-        if self.pipeline is None:
-            return
-        resultado = self.pipeline.substituir_captura(
-            revisao["imagem_id"], revisao["id"], path
-        )
-        if resultado.get("erro"):
-            QMessageBox.warning(self, "Nao foi possivel substituir", resultado["erro"])
-        elif resultado.get("substituida"):
-            ocr = self.pipeline.processar_ocr_secundario(resultado["imagem_id"])
-            complemento = (
-                "\nO OCR da nova fotografia foi processado e salvo."
-                if not ocr.get("erro")
-                else f"\nA fotografia foi salva, mas o OCR apontou erro: {ocr['erro']}"
-            )
-            QMessageBox.information(
-                self,
-                "Fotografia substituida",
-                f"{self._contexto_refoto(revisao)} foi corrigida sem alterar a contagem."
-                f"{complemento}",
-            )
-        else:
-            motivos = ", ".join(resultado["qualidade"].get("motivos_refazer", []))
-            QMessageBox.warning(
-                self,
-                "A nova foto ainda precisa ser refeita",
-                f"Ela continuara na lista: {motivos}",
-            )
-        self._carregar()
+            aplicar_refoto(self, self.pipeline, revisao, path, on_aplicado=self._carregar)
