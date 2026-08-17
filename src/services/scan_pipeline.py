@@ -382,7 +382,7 @@ class ScanPipeline:
         from .telemetry import emitir
         emitir("capture.saved", imagem_id=imagem_id, duration_ms=round(elapsed, 1),
                qualidade="repetir" if qualidade["repetir_captura"] else "ok",
-               duplicidade=dup["status"], bytes=int(armazenamento_result.output_size_bytes or 0)
+               duplicidade=dup["status"], bytes=int(armazenamento_result.output_bytes or 0)
                if armazenamento_result else 0)
 
         return {
