@@ -156,6 +156,44 @@ def test_estado_enum_consistente_com_status():
     assert CaptureState.PAGINA_PRONTAA in estados_vistos
 
 
+def test_hud_da_camera_colore_estado_e_mostra_bloqueio():
+    """M2-T03: HUD offscreen — cor por estado, contagem e indicador de bloqueio."""
+    from PySide6.QtWidgets import QApplication
+    from src.capture.auto_capture import CaptureState, FrameAnalysis
+    from src.ui.camera_capture_dialog import CameraCaptureDialog, CORES_ESTADO
+
+    app = QApplication.instance() or QApplication([])
+    dialogo = CameraCaptureDialog(
+        capture_dir=Path(__file__).resolve().parent / "hud_inexistente",
+        context_provider=lambda: "ctx",
+        parent=None,
+    )
+    frame = np.full((200, 300, 3), 220, np.uint8)
+
+    def analise(estado, contagem=None):
+        return FrameAnalysis(
+            movimento=0.0, foco=200.0, mao_presente=False,
+            pagina_presente=True, status=estado.value,
+            contagem=contagem, capturar=False, enquadrada=True,
+            pagina_contorno=None, estado=estado,
+        )
+
+    dialogo._mostrar_preview(frame, analise(CaptureState.PAGINA_PRONTAA, contagem=0.8))
+    texto_pronto = dialogo.status.text()
+    assert "Pagina pronta" in texto_pronto
+    assert "0.8" in texto_pronto
+    assert CORES_ESTADO[CaptureState.PAGINA_PRONTAA] in dialogo.status.styleSheet()
+
+    dialogo._mostrar_preview(frame, analise(CaptureState.TROQUE_PAGINA))
+    assert "BLOQUEADO" in dialogo.status.text()
+    assert CORES_ESTADO[CaptureState.TROQUE_PAGINA] in dialogo.status.styleSheet()
+
+    dialogo._mostrar_preview(frame, analise(CaptureState.SEM_FOLHA))
+    assert "Posicione a pagina" in dialogo.status.text()
+    assert CORES_ESTADO[CaptureState.SEM_FOLHA] in dialogo.status.styleSheet()
+    dialogo.close()
+
+
 def _pagina_vazia() -> np.ndarray:
     return np.full((720, 960, 3), 30, np.uint8)
 

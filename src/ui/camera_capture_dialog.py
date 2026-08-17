@@ -20,8 +20,20 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
 )
 
-from ..capture.auto_capture import AutoCaptureController, FrameAnalysis
+from ..capture.auto_capture import AutoCaptureController, CaptureState, FrameAnalysis
 from ..services.telemetry import emitir
+
+CORES_ESTADO = {
+    CaptureState.SEM_FOLHA: "#ef8c00",
+    CaptureState.MAO_PRESENTE: "#c62828",
+    CaptureState.NAO_ENQUADRADA: "#ef8c00",
+    CaptureState.AGUARDANDO_FOCO: "#ef8c00",
+    CaptureState.AGUARDANDO_ESTABILIDADE: "#ef8c00",
+    CaptureState.PAGINA_PRONTAA: "#2e7d32",
+    CaptureState.CAPTURADA: "#1565c0",
+    CaptureState.TROQUE_PAGINA: "#c62828",
+    CaptureState.CAPTURA_MANUAL: "#2e7d32",
+}
 
 
 class CameraCaptureDialog(QDialog):
@@ -174,7 +186,8 @@ class CameraCaptureDialog(QDialog):
             else:
                 self._controller.reset()
                 analise.capturar = False
-                analise.status = "Pronta para captura manual"
+                analise.status = CaptureState.CAPTURA_MANUAL.value
+                analise.estado = CaptureState.CAPTURA_MANUAL
         self._mostrar_preview(frame, analise)
         self.contexto.setText(self.context_provider())
 
@@ -199,11 +212,24 @@ class CameraCaptureDialog(QDialog):
                 cor_pagina,
                 max(2, int(w * 0.002)),
             )
+        # HUD: faixa superior com o estado atual + contagem + indicador de bloqueio.
         texto = analise.status
+        if analise.estado == CaptureState.TROQUE_PAGINA:
+            texto += " [BLOQUEADO]"
         if analise.contagem is not None and analise.contagem > 0:
             texto = f"{texto}: {analise.contagem:.1f}s"
+        largura_barra = max(320, int(w * 0.6))
+        cv2.rectangle(exibida, (8, 8), (8 + largura_barra, 44), (24, 24, 24), -1)
+        cv2.putText(
+            exibida, texto, (18, 33), cv2.FONT_HERSHEY_SIMPLEX, 0.7,
+            (255, 255, 255), 2, cv2.LINE_AA,
+        )
+        cor = CORES_ESTADO.get(analise.estado, "#37474f")
         self.status.setText(
             f"{texto} | foco {analise.foco:.0f} | movimento {analise.movimento:.1f}"
+        )
+        self.status.setStyleSheet(
+            f"font-size: 18px; font-weight: bold; color: {cor};"
         )
         rgb = cv2.cvtColor(exibida, cv2.COLOR_BGR2RGB)
         qimg = QImage(rgb.data, rgb.shape[1], rgb.shape[0], rgb.strides[0], QImage.Format.Format_RGB888).copy()
