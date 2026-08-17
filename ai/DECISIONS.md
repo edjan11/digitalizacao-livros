@@ -57,3 +57,12 @@
 - Confirmado por medição: fila/lock/retomada com overhead desprezível (~0,3 s/item
   frente a 16–48 s de inferência), RSS estável (~40 MB), kill+retomada sem
   duplicidade/perda, 2 workers bloqueados pelo lock. Topologia NÃO muda.
+
+## D-013 · Estados de captura formalizados em enum (M2)
+- `CaptureState` + `FrameAnalysis.estado` em `auto_capture.py`. Valores do enum
+  são as mensagens do operador; `status` deriva do enum. Sem mudança de limiares.
+
+## D-014 · Fix da recaptura da mesma folha (M2, achado D-011)
+- Cooldown destrava apenas com página nova presente e estável por `tempo_troca`
+  (0,6 s). Frame sem página ou mesma folha → permanece bloqueado. Páginas
+  sintéticas dos testes agora simulam enquadramento real (diferença por seed).

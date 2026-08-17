@@ -1,22 +1,21 @@
 {
   "project": "digitalizacao-livros",
-  "phase": "M1",
+  "phase": "M2",
   "status": "concluido",
-  "baseline": "86 passed in 408.16s (2026-08-16) — era 77 no M0",
-  "git": "ultimo commit bb5f107",
-  "current_task": "M1-T05 (relatorio operacional)",
-  "last_tests": "86 passed",
-  "next_action": "aguardando aprovacao do M2",
-  "telemetry": "ativa (events.jsonl em data_dir/telemetry) — eventos ocr.*, qwen.*, job.failed, lote.status, capture.*, resource.sample",
+  "baseline": "90 passed in 412.14s (2026-08-16)",
+  "git": "ultimo commit 17ddac1",
+  "current_task": "M2-T04 (fechamento do milestone)",
+  "last_tests": "90 passed",
+  "next_action": "aguardando aprovacao do M3",
+  "telemetry": "ativa — aguardando sessao real do operador para capture.sample",
   "open_risks": [
-    "glare/reflexo nao detectado",
-    "oscilacao do detector pode recapturar a mesma folha (ACHADO M1-T03)",
-    "sem painel de 'o que falta no livro'",
-    "FPS/jitter reais da camera nao medidos (aguarda sessao do operador)"
+    "glare/reflexo nao detectado (M3)",
+    "FPS/jitter reais da camera nao medidos",
+    "folha nova muito parecida em enquadramento identico pode ficar bloqueada (falso negativo raro)",
+    "mesma folha recolocada em posicao bem diferente pode virar duplicata (mitigada pela duplicidade)"
   ],
   "pending_decisions": [
-    "M2: tratar oscilacao do detector e formalizar estados em enum",
-    "M3: glare + benchmark maos",
+    "M3: glare + benchmark de maos com frames reais",
     "M4/M5: painel fim-de-livro e recaptura por folha"
   ]
 }
