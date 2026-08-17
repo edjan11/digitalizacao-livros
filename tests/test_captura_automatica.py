@@ -129,3 +129,94 @@ def test_retirar_mao_sem_trocar_folha_nao_libera_duplicata():
     assert controller.analisar(mao, agora=0.2).capturar is False
     assert controller.analisar(pagina, agora=0.3).capturar is False
     assert controller.analisar(pagina, agora=0.4).status == "Troque a pagina"
+
+
+def _pagina_vazia() -> np.ndarray:
+    return np.full((720, 960, 3), 30, np.uint8)
+
+
+def test_matriz_de_transicoes_da_captura():
+    """Caracterizacao M1: cada estado alcancavel com status e flag capturar corretos."""
+    pagina = _pagina(30)
+    controller = AutoCaptureController(tempo_estavel=0.5)
+
+    # SEM_FOLHA: fundo escuro sem pagina detectada.
+    sem = controller.analisar(_pagina_vazia(), agora=0.0)
+    assert sem.status == "Posicione a pagina"
+    assert not sem.capturar and not sem.pagina_presente
+
+    # DETECTADA (estabilizando): pagina presente mas movimento alto no 1o frame.
+    detectada = controller.analisar(pagina, agora=0.1)
+    assert detectada.pagina_presente
+    assert detectada.status in ("Pagina pronta", "Aguarde estabilizar", "Capturada")
+
+    # PRONTA->CAPTURADA com tempo de estabilidade.
+    pronta = controller.analisar(pagina, agora=0.2)
+    assert pronta.status == "Pagina pronta" if pronta.contagem else pronta.status != "Capturada"
+    capturada = controller.analisar(pagina, agora=0.8)
+    assert capturada.capturar and capturada.status == "Capturada"
+
+    # COOLDOWN: mesma pagina repetida.
+    cooldown = controller.analisar(pagina, agora=0.9)
+    assert cooldown.status == "Troque a pagina"
+    assert not cooldown.capturar
+
+
+def test_documento_some_durante_estabilizacao_reseta_contagem():
+    pagina = _pagina(31)
+    controller = AutoCaptureController(tempo_estavel=0.5)
+    controller.analisar(pagina, agora=0.0)
+    controller.analisar(pagina, agora=0.3)  # inicia estabilizacao
+
+    some = controller.analisar(_pagina_vazia(), agora=0.45)
+    assert some.status == "Posicione a pagina"
+    assert not some.capturar
+
+    # A estabilizacao reiniciou: mesmo com tempo decorrido, ainda nao dispara.
+    volta = controller.analisar(pagina, agora=0.8)
+    assert not volta.capturar
+    assert controller.analisar(pagina, agora=1.0).status != "Capturada"
+    assert controller.analisar(pagina, agora=1.6).capturar
+
+
+def test_movimento_forte_durante_estabilizacao_reseta_contagem():
+    """Caracterizacao real (M1): a virada (frame quase preto) some a pagina e
+    reinicia a estabilizacao; o retorno da pagina passa por Aguarde/Pagina pronta."""
+    pagina = _pagina(32)
+    controller = AutoCaptureController(tempo_estavel=0.5)
+    assert controller.analisar(pagina, agora=0.0).status == "Aguarde estabilizar"
+    assert controller.analisar(pagina, agora=0.3).status == "Pagina pronta"
+
+    transicao = np.full_like(pagina, 35)
+    assert controller.analisar(transicao, agora=0.35).status == "Posicione a pagina"
+    assert controller.analisar(pagina, agora=0.4).status == "Aguarde estabilizar"
+    assert controller.analisar(pagina, agora=0.5).status == "Pagina pronta"
+    assert controller.analisar(pagina, agora=1.1).capturar
+
+
+def test_captura_manual_marca_bloqueio_sem_disparo_automatico():
+    pagina = _pagina(33)
+    controller = AutoCaptureController(tempo_estavel=0.0)
+    assert not controller.analisar(pagina, agora=0.0).capturar
+    assert controller.analisar(pagina, agora=0.1).capturar
+
+    controller.marcar_capturada(pagina)
+    assert controller.analisar(pagina, agora=0.2).status == "Troque a pagina"
+    assert not controller.analisar(pagina, agora=0.3).capturar
+
+
+def test_detector_oscilando_pode_liberar_recaptura_da_mesma_folha():
+    """ACHADO M1: um frame sem pagina entre o cooldown destrava o bloqueio; se a
+    MESMA folha voltar, a captura e liberada de novo (potencial duplicata).
+    Comportamento ATUAL documentado; candidato a correcao no M2."""
+    pagina = _pagina(34)
+    controller = AutoCaptureController(tempo_estavel=0.0)
+    assert controller.analisar(pagina, agora=0.0).status == "Aguarde estabilizar"
+    assert controller.analisar(pagina, agora=0.1).capturar
+    assert controller.analisar(pagina, agora=0.2).status == "Troque a pagina"
+
+    # Frame sem pagina destrava o bloqueio de cena.
+    assert controller.analisar(_pagina_vazia(), agora=0.3).status == "Posicione a pagina"
+    # A mesma folha retorna: primeiro frame alto movimento, nao captura.
+    assert controller.analisar(pagina, agora=0.4).status == "Aguarde estabilizar"
+    assert controller.analisar(pagina, agora=0.4).capturar  # e captura em seguida
