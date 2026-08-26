@@ -13,6 +13,7 @@ from ..session.scan_session import ScanSession
 from ..imaging.quality import avaliar_qualidade
 from ..imaging.thumbnail import gerar_thumbnail
 from ..imaging.preprocess import preprocess_for_ocr
+from ..imaging.enhance import melhorar_pagina
 from ..imaging.adaptive_layout import AdaptiveLayoutDetector
 from ..imaging.storage_derivative import criar_derivada_armazenamento
 from ..duplicate.hashing import compute_hashes, compute_sha256
@@ -130,6 +131,16 @@ class ScanPipeline:
         image = cv2.imread(str(path))
         if image is None:
             return {"erro": "Nao foi possivel ler a imagem"}
+
+        # Modo scan (Adobe-Scan-like): recorta a pagina, endireita e clarea o
+        # fundo antes de qualquer analise. A original no disco permanece
+        # intacta; a copia de armazenamento guarda a versao melhorada, o que
+        # tambem reduz falsas revisoes de foco/exposicao.
+        melhoria_ativa = bool(
+            self.settings.get("imaging", "enhance_enabled", True)
+            if self.settings else True
+        )
+        image, melhoria = melhorar_pagina(image, ativo=melhoria_ativa)
 
         armazenamento_path = None
         armazenamento_sha256 = None
@@ -417,6 +428,7 @@ class ScanPipeline:
             "classificacao": classificacao,
             "rotacao_visualizacao": classificacao["rotacao"],
             "layout": layout.to_dict(),
+            "melhoria_pagina": melhoria,
             "registros_detectados": registros_para_face if eh_registro else 0,
         }
 

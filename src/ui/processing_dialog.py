@@ -24,7 +24,7 @@ from PySide6.QtWidgets import (
 )
 
 from ..services.name_processing import NameBatchRunner
-
+from .theme import VERDE_ESMERALDA, VERDE_ESMERALDA_HOVER, TEXTO_PRIMARIO, STATUS_OK, STATUS_ERRO, STATUS_ATENCAO, SUPERFICIE, BORDA, TEXTO_NEON
 
 class NameProcessingWorker(QThread):
     progresso = Signal(dict, str)
@@ -137,7 +137,9 @@ class ProcessingDialog(QDialog):
         acoes = QHBoxLayout()
         self.btn_iniciar = QPushButton("Iniciar / Retomar")
         self.btn_iniciar.setStyleSheet(
-            "QPushButton { background:#1976d2; color:white; font-weight:bold; padding:7px 16px; }"
+            f"QPushButton {{ background-color: {VERDE_ESMERALDA}; color: {TEXTO_PRIMARIO}; "
+            f"font-weight: bold; padding: 7px 16px; border: none; }} "
+            f"QPushButton:hover {{ background-color: {VERDE_ESMERALDA_HOVER}; }}"
         )
         self.btn_iniciar.clicked.connect(self.iniciar)
         acoes.addWidget(self.btn_iniciar)
@@ -342,12 +344,12 @@ class ProcessingDialog(QDialog):
         itens = self._itens_filtrados()
         self.tabela.setRowCount(len(itens))
         cores = {
-            "confirmado": ("#e8f5e9", "#1b5e20"),
-            "falhou": ("#ffebee", "#b71c1c"),
-            "revisar": ("#ffebee", "#b71c1c"),
-            "processando": ("#e3f2fd", "#0d47a1"),
-            "pendente": ("#e3f2fd", "#0d47a1"),
-            "sugestao": ("#ffffff", "#37474f"),
+            "confirmado": (SUPERFICIE, STATUS_OK),
+            "falhou": (SUPERFICIE, STATUS_ERRO),
+            "revisar": (SUPERFICIE, STATUS_ATENCAO),
+            "processando": (SUPERFICIE, TEXTO_NEON),
+            "pendente": (SUPERFICIE, TEXTO_NEON),
+            "sugestao": (SUPERFICIE, TEXTO_NEON),
         }
         for linha, item in enumerate(itens):
             valores = [

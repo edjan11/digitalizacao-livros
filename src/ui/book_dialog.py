@@ -11,6 +11,7 @@ from PySide6.QtGui import QFont
 
 from ..database.repository import Repository
 from ..session.scan_session import ScanSession
+from .theme import VERDE_ESMERALDA, VERDE_ESMERALDA_HOVER, TEXTO_PRIMARIO, TEXTO_NEON
 
 logger = logging.getLogger(__name__)
 
@@ -87,7 +88,7 @@ class BookDialog(QDialog):
             * self.registros_por_face.value()
         )
         self.lbl_estimativa = QLabel(f"Estimativa: ~{total_registros} registros")
-        self.lbl_estimativa.setStyleSheet("color: #1976d2; font-weight: bold;")
+        self.lbl_estimativa.setStyleSheet(f"color: {TEXTO_NEON}; font-weight: bold;")
         self.lbl_estimativa.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(self.lbl_estimativa)
 
@@ -102,7 +103,9 @@ class BookDialog(QDialog):
 
         btn_salvar = QPushButton("Salvar e Iniciar")
         btn_salvar.setStyleSheet(
-            "QPushButton { background: #4caf50; color: white; font-weight: bold; padding: 8px 24px; border-radius: 6px; }"
+            f"QPushButton {{ background-color: {VERDE_ESMERALDA}; color: {TEXTO_PRIMARIO}; "
+            f"font-weight: bold; padding: 8px 24px; border-radius: 6px; border: none; }} "
+            f"QPushButton:hover {{ background-color: {VERDE_ESMERALDA_HOVER}; }}"
         )
         btn_salvar.clicked.connect(self._salvar)
         btn_layout.addWidget(btn_salvar)

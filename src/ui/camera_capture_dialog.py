@@ -24,15 +24,15 @@ from ..capture.auto_capture import AutoCaptureController, CaptureState, FrameAna
 from ..services.telemetry import emitir
 
 CORES_ESTADO = {
-    CaptureState.SEM_FOLHA: "#ef8c00",
-    CaptureState.MAO_PRESENTE: "#c62828",
-    CaptureState.NAO_ENQUADRADA: "#ef8c00",
-    CaptureState.AGUARDANDO_FOCO: "#ef8c00",
-    CaptureState.AGUARDANDO_ESTABILIDADE: "#ef8c00",
-    CaptureState.PAGINA_PRONTAA: "#2e7d32",
-    CaptureState.CAPTURADA: "#1565c0",
-    CaptureState.TROQUE_PAGINA: "#c62828",
-    CaptureState.CAPTURA_MANUAL: "#2e7d32",
+    CaptureState.SEM_FOLHA: "#FBBF24",
+    CaptureState.MAO_PRESENTE: "#F87171",
+    CaptureState.NAO_ENQUADRADA: "#FBBF24",
+    CaptureState.AGUARDANDO_FOCO: "#FBBF24",
+    CaptureState.AGUARDANDO_ESTABILIDADE: "#FBBF24",
+    CaptureState.PAGINA_PRONTAA: "#34D399",
+    CaptureState.CAPTURADA: "#60A5FA",
+    CaptureState.TROQUE_PAGINA: "#F87171",
+    CaptureState.CAPTURA_MANUAL: "#34D399",
 }
 
 
@@ -66,6 +66,9 @@ class CameraCaptureDialog(QDialog):
         self._timer = QTimer(self)
         self._timer.timeout.connect(self._atualizar_frame)
         self.finished.connect(lambda _result: self._parar_camera())
+        # A camera ja inicia aberta; um pequeno atraso deixa a janela pintar
+        # primeiro (e o aviso modal ter parent correto se falhar).
+        QTimer.singleShot(150, self._alternar_camera)
 
     def _init_ui(self, camera_index: int) -> None:
         layout = QVBoxLayout(self)
@@ -77,7 +80,7 @@ class CameraCaptureDialog(QDialog):
         self.preview = QLabel("Camera parada")
         self.preview.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.preview.setMinimumSize(960, 590)
-        self.preview.setStyleSheet("background: #161616; color: white;")
+        self.preview.setStyleSheet("background: #0F172A; color: #F0F4F8; border: 1px solid #334155;")
         layout.addWidget(self.preview, 1)
 
         self.status = QLabel("Posicione a pagina dentro da guia")
@@ -107,25 +110,60 @@ class CameraCaptureDialog(QDialog):
         controles.addWidget(fechar)
         layout.addLayout(controles)
 
+    def _abrir_camera_tentativas(self, indice: int):
+        """Tenta abrir em varios backends/indices exigindo um frame real.
+
+        Cameras integradas costumam demorar a liberar apos outro uso e o
+        backend preferido varia por driver; uma unica tentativa com CAP_DSHOW
+        falhava mesmo com a camera sadia.
+        """
+        backends = [
+            ("DSHOW", getattr(cv2, "CAP_DSHOW", cv2.CAP_ANY)),
+            ("MSMF", getattr(cv2, "CAP_MSMF", cv2.CAP_ANY)),
+            ("ANY", cv2.CAP_ANY),
+        ]
+        indices = [indice] + [i for i in range(0, 4) if i != indice]
+        falhas: list[str] = []
+        for idx in indices:
+            for nome_backend, backend in backends:
+                cap = cv2.VideoCapture(int(idx), backend)
+                ok = False
+                if cap.isOpened():
+                    # Exige um frame de verdade; abrir sem entregar imagem
+                    # deixava o preview congelado em "Falha ao ler".
+                    for _ in range(6):
+                        leu, _frame = cap.read()
+                        if leu:
+                            ok = True
+                            break
+                        time.sleep(0.05)
+                if ok:
+                    cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1920)
+                    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 1080)
+                    return cap, idx, []
+                cap.release()
+                falhas.append(f"cam {idx} via {nome_backend}")
+        return None, indice, falhas
+
     def _alternar_camera(self) -> None:
         if self._cap is not None:
             self._parar_camera()
             return
         indice = self.indice.value()
-        backend = cv2.CAP_DSHOW if hasattr(cv2, "CAP_DSHOW") else cv2.CAP_ANY
-        cap = cv2.VideoCapture(indice, backend)
-        if not cap.isOpened():
-            cap.release()
+        cap, idx, falhas = self._abrir_camera_tentativas(indice)
+        if cap is None:
             QMessageBox.warning(
                 self,
                 "Camera nao encontrada",
-                f"Nao foi possivel abrir a camera {indice}.\n"
+                f"Nenhuma camera respondeu (indice {indice}).\n"
+                + ("Tentativas: " + "; ".join(falhas[:6]) + ".\n" if falhas else "")
+                + "Feche outros programas que usem a camera e tente de novo.\n"
                 "A modalidade por pasta/CZUR continua disponivel.",
             )
             return
-        cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1920)
-        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 1080)
         self._cap = cap
+        if idx != indice:
+            self.indice.setValue(idx)
         self._controller.reset()
         self.indice.setEnabled(False)
         self.btn_iniciar.setText("Parar camera")

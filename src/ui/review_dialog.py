@@ -13,6 +13,7 @@ from PySide6.QtWidgets import (
 from ..database.repository import Repository
 from ..services.scan_pipeline import ScanPipeline
 from .camera_capture_dialog import CameraCaptureDialog
+from .theme import SUPERFICIE, BORDA
 
 logger = logging.getLogger(__name__)
 
@@ -173,7 +174,7 @@ class ReviewDialog(QDialog):
 
     def _criar_card(self, revisao: dict) -> QFrame:
         card = QFrame()
-        card.setStyleSheet("QFrame { border: 1px solid #e0e0e0; border-radius: 6px; background: white; margin: 4px; }")
+        card.setStyleSheet(f"QFrame {{ border: 1px solid {BORDA}; border-radius: 6px; background-color: {SUPERFICIE}; margin: 4px; }}")
         layout = QVBoxLayout(card)
 
         tipo = revisao.get("tipo", "desconhecido")

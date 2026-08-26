@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (
 import cv2
 from ..ocr.engines import TesseractProvider, RapidOCRProvider
 from ..ocr.htr_engine import HTREngine
+from .theme import SECUNDARIO_BG, SECUNDARIO_BORDA, TEXTO_PRIMARIO
 from ..ocr.combiner import OCRCombiner
 
 logger = logging.getLogger(__name__)
@@ -78,7 +79,11 @@ class LabDialog(QDialog):
         top = QHBoxLayout()
         btn_pasta = QPushButton("Selecionar Pasta com Imagens")
         btn_pasta.setMinimumHeight(40)
-        btn_pasta.setStyleSheet("QPushButton { background: #1976d2; color: white; font-weight: bold; border-radius: 6px; font-size: 13px; }")
+        btn_pasta.setStyleSheet(
+            f"QPushButton {{ background-color: {SECUNDARIO_BG}; color: {TEXTO_PRIMARIO}; "
+            f"font-weight: bold; border: 1px solid {SECUNDARIO_BORDA}; border-radius: 6px; font-size: 13px; }} "
+            f"QPushButton:hover {{ background-color: #3B4757; }}"
+        )
         btn_pasta.clicked.connect(self._selecionar_pasta)
         top.addWidget(btn_pasta)
         btn_limpar = QPushButton("Limpar")

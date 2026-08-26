@@ -50,6 +50,9 @@ def main():
     configurar(settings)
     iniciar_amostrador()
 
+    from src.ui.theme import QSS
+    app.setStyleSheet(QSS)
+
     window = MainWindow(settings)
     window.show()
 
