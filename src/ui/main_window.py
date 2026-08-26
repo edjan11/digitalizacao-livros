@@ -30,7 +30,7 @@ class MainWindow(QMainWindow):
     def __init__(self, settings: Settings) -> None:
         super().__init__()
         self.settings = settings
-        self.setWindowTitle("Digitalizador de Livros")
+        self.setWindowTitle("Digitalizador de Livros v2.0 Enterprise")
         self.setMinimumSize(1200, 760)
         self.resize(1440, 900)
 
@@ -69,13 +69,17 @@ class MainWindow(QMainWindow):
         top_bar.setContentsMargins(8, 4, 8, 4)
         titulo = QLabel("DIGITALIZADOR DE LIVROS")
         titulo.setFont(QFont("Segoe UI", 10, QFont.Weight.Bold))
-        titulo.setStyleSheet("color: #1565c0;")
+        titulo.setStyleSheet("color: #F0F4F8;")
         top_bar.addWidget(titulo)
         top_bar.addStretch()
         btn_lab = QPushButton("Laboratorio")
         btn_lab.setToolTip("Ferramenta de teste de OCR/HTR")
         btn_lab.clicked.connect(self._abrir_lab)
         top_bar.addWidget(btn_lab)
+        btn_config = QPushButton("Configuracoes")
+        btn_config.setToolTip("Pastas de destino, scanner e OCR")
+        btn_config.clicked.connect(self._abrir_config)
+        top_bar.addWidget(btn_config)
         if self._selector.layout() is None:
             self._selector.setLayout(QVBoxLayout())
         self._selector.layout().insertLayout(0, top_bar)
@@ -115,23 +119,52 @@ class MainWindow(QMainWindow):
         if not livro:
             return
         acervo_root = Path(self.settings.get("acervo", "root_path", r"D:\AcervoLivros"))
+        try:
+            acervo_root.mkdir(parents=True, exist_ok=True)
+        except (OSError, PermissionError):
+            acervo_root = Path.home() / "DigitalizadorLivros" / "Acervo"
+            acervo_root.mkdir(parents=True, exist_ok=True)
         self._pipeline = ScanPipeline(self._repo, self._session, acervo_root, self.settings)
 
         czur_path = carregar_pasta(self.settings, "czur", "watch_folder")
         if not str(czur_path):
-            czur_path = Path(r"D:\CZUR\Scans")
-        if not czur_path.exists():
-            czur_path.mkdir(parents=True, exist_ok=True)
+            czur_path = Path.home() / "DigitalizadorLivros" / "CZUR" / "Scans"
+        czur_path = self._garantir_pasta(czur_path, "pasta monitorada (CZUR)")
         self._watcher.iniciar(str(czur_path))
 
         self._scan_screen = ScanScreen(self._repo, self._session, self._pipeline)
+        self._scan_screen.set_scanner_status(True)
         self._scan_screen.voltar_clicked.connect(self._voltar_selecao)
         self._scan_screen.revisao_clicked.connect(self._abrir_revisao)
         self._stack.addWidget(self._scan_screen)
         self._stack.setCurrentWidget(self._scan_screen)
-        self.statusBar().showMessage(f"Digitalizando: {self._session.resumo}")
+        self.statusBar().showMessage("Digitalização automática de mesa ativada.")
 
-    @Slot(str)
+    def _garantir_pasta(self, pasta: Path, descricao: str) -> Path:
+        """Garante uma pasta gravavel, recaindo para a home do usuario.
+
+        O caminho configurado pode apontar para uma midia protegida (ex.:
+        leitora de CD/DVD em D:\\) e falhar com PermissionError. Em vez de
+        travar silenciosamente a abertura do livro, usamos um subdiretorio da
+        pasta do usuario e avisamos o operador.
+        """
+        pasta = Path(pasta)
+        try:
+            pasta.mkdir(parents=True, exist_ok=True)
+            return pasta
+        except (OSError, PermissionError) as exc:
+            fallback = Path.home() / "DigitalizadorLivros" / pasta.name
+            try:
+                fallback.mkdir(parents=True, exist_ok=True)
+            except (OSError, PermissionError):
+                pass
+            QMessageBox.warning(
+                self,
+                "Pasta indisponivel",
+                f"Nao foi possivel usar a {descricao}:\n{pasta}\n({exc})\n\n"
+                f"Usando instead: {fallback}",
+            )
+            return fallback    @Slot(str)
     def _on_nova_imagem(self, path: str) -> None:
         if self._scan_screen and self._stack.currentWidget() == self._scan_screen:
             self._scan_screen.processar_nova_imagem(path)
@@ -149,6 +182,11 @@ class MainWindow(QMainWindow):
 
     def _abrir_lab(self) -> None:
         dlg = LabDialog(self)
+        dlg.exec()
+
+    def _abrir_config(self) -> None:
+        from .settings_dialog import SettingsDialog
+        dlg = SettingsDialog(self.settings, self)
         dlg.exec()
 
     def closeEvent(self, event) -> None:

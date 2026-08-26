@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import time
 import logging
 
@@ -24,6 +25,27 @@ def _redimensionar(image: np.ndarray, largura: int) -> np.ndarray:
         return image
     escala = largura / w
     return cv2.resize(image, (largura, max(1, int(h * escala))), interpolation=cv2.INTER_AREA)
+
+
+def _tem_rotulo_termo(texto: str) -> bool:
+    """Indica se a leitura ja trouxe um numero precedido de rotulo de termo."""
+    return re.search(
+        r"(?i)(?:termo|numero|n[uú]mero|n[º°])\s*[:.]?\s*\d", texto or ""
+    ) is not None
+
+
+def _binarizar_para_digitos(image: np.ndarray) -> np.ndarray:
+    """Versao ampliada e binarizada (Otsu) para um segundo passe de socorro.
+
+    Fotos reais trazem o numero do termo em traco claro sobre papel curvado.
+    Ampliar 1,5x devolve resolucao aos algarismos e o Otsu separa tinta de
+    fundo sombreado; o modo esparso (psm 11) le numeros fora de bloco de
+    paragrafo, que o psm 6 costuma engolir.
+    """
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    gray = cv2.resize(gray, None, fx=1.5, fy=1.5, interpolation=cv2.INTER_CUBIC)
+    binaria = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)[1]
+    return cv2.cvtColor(binaria, cv2.COLOR_GRAY2BGR)
 
 
 def _extrair_tokens_avancado(texto: str) -> list[OCRToken]:
@@ -84,6 +106,24 @@ class TesseractProvider(OCRProvider):
                 texto = self._engine.read_array(img, psm=6)
             else:
                 texto = self._engine.read(img, psm=6)
+            # Segundo passe de socorro: sem rotulo de termo no texto, tenta
+            # novamente sobre versao binarizada e ampliada em modo esparso.
+            # O custo extra so existe quando a leitura normal nao achou o
+            # numero, que e exatamente o caso em que ele vale a pena.
+            if (
+                isinstance(img, np.ndarray)
+                and not fast
+                and not _tem_rotulo_termo(texto)
+            ):
+                try:
+                    reforco = self._engine.read_array(
+                        _binarizar_para_digitos(img), psm=11
+                    )
+                    if reforco.strip():
+                        texto = f"{texto}\n{reforco}"
+                        logger.info("Tesseract: segundo passe encontrou texto adicional")
+                except Exception as exc:
+                    logger.warning("Segundo passe Tesseract falhou: %s", exc)
             result.texto_bruto = texto.strip()
             tokens = _extrair_tokens_avancado(texto.strip())
             for t in tokens:

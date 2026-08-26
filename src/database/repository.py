@@ -291,6 +291,15 @@ class Repository:
             if not self.tem_revisao_pendente(imagem_id):
                 self.atualizar_imagem(imagem_id, precisa_revisao=0)
 
+    def resolver_revisoes_tipo(self, imagem_id: int, tipo: str) -> None:
+        """Marca como resolvidas as revisoes pendentes de um tipo na imagem."""
+        linhas = self.db.fetchall(
+            "SELECT id FROM revisao WHERE imagem_id=? AND tipo=? AND resolvida=0",
+            (int(imagem_id), tipo),
+        )
+        for linha in linhas:
+            self.resolver_revisao(int(linha["id"]))
+
     def atualizar_revisao(self, revisao_id: int, detalhes: str) -> None:
         self.db.update(
             "UPDATE revisao SET detalhes=? WHERE id=?",

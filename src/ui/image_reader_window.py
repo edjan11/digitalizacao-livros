@@ -30,6 +30,7 @@ from ..imaging.record_regions import bbox_registro
 from ..ocr.combiner import texto_evidencia_termo
 
 from .image_viewer import ImageViewer
+from .theme import STATUS_OK, STATUS_ERRO, TEXTO_NEON
 
 
 TIPOS_REVISOR = {
@@ -238,7 +239,7 @@ class ImageReaderWindow(QMainWindow):
     def _copiar_caminho(self) -> None:
         QApplication.clipboard().setText(str(self.image_path))
         self.status.setText("CAMINHO COPIADO")
-        self.status.setStyleSheet("color:#1976d2; font-weight:bold;")
+        self.status.setStyleSheet(f"color:{TEXTO_NEON}; font-weight:bold;")
 
     def _status_texto(self) -> str:
         statuses = [str(m.get("status") or "") for m in self._metadados]
@@ -252,7 +253,7 @@ class ImageReaderWindow(QMainWindow):
 
     def _status_estilo(self) -> str:
         texto = self._status_texto()
-        cor = "#2e7d32" if texto == "CONFIRMADO" else "#c62828" if texto == "REVISAR" else "#1976d2"
+        cor = STATUS_OK if texto == "CONFIRMADO" else STATUS_ERRO if texto == "REVISAR" else TEXTO_NEON
         return f"color:{cor}; font-weight:bold; padding:4px 8px;"
 
     def _texto_transcricao(self) -> str:

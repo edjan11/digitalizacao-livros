@@ -35,6 +35,7 @@ from .review_dialog import (
     aplicar_refoto,
     rotulo_revisao,
 )
+from .theme import VERDE_ESMERALDA, VERDE_ESMERALDA_HOVER, TEXTO_PRIMARIO, TEXTO_NEON, STATUS_OK, SUPERFICIE
 
 FILTROS = [
     ("todos", "Todos"),
@@ -140,8 +141,9 @@ class BookReviewDialog(QDialog):
         botoes = QHBoxLayout()
         self.btn_concluir = QPushButton("Fechar e marcar conferido")
         self.btn_concluir.setStyleSheet(
-            "QPushButton { background: #2e7d32; color: white; font-weight: bold; "
-            "padding: 8px 18px; border-radius: 5px; }"
+            f"QPushButton {{ background-color: {VERDE_ESMERALDA}; color: {TEXTO_PRIMARIO}; "
+            f"font-weight: bold; padding: 8px 18px; border-radius: 5px; border: none; }} "
+            f"QPushButton:hover {{ background-color: {VERDE_ESMERALDA_HOVER}; }}"
         )
         self.btn_concluir.clicked.connect(self._concluir)
         botoes.addWidget(self.btn_concluir)
@@ -184,7 +186,7 @@ class BookReviewDialog(QDialog):
         pronto = not self._revisoes
         if pronto:
             self.lbl_rodape.setText("Livro pronto ✓ — nenhuma pendencia")
-            self.lbl_rodape.setStyleSheet("color: #2e7d32;")
+            self.lbl_rodape.setStyleSheet(f"color: {STATUS_OK};")
         else:
             self.lbl_rodape.setText(f"{total} pendencia(s)")
             self.lbl_rodape.setStyleSheet("color: #c62828;")
@@ -227,8 +229,8 @@ class BookReviewDialog(QDialog):
         card = QFrame()
         card.setObjectName("card_pendencia")
         card.setStyleSheet(
-            "QFrame { border: 1px solid #e0e0e0; border-radius: 6px; "
-            "background: white; margin: 4px; }"
+            f"QFrame#card_pendencia {{ border: 1px solid #343B48; border-radius: 6px; "
+            f"background-color: {SUPERFICIE}; margin: 4px; }}"
         )
         layout = QVBoxLayout(card)
 

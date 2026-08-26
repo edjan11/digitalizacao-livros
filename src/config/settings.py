@@ -13,6 +13,11 @@ import yaml
 APP_NAME = "DigitalizadorLivros"
 APP_VERSION = "1.1.0"
 
+# Pastas operacionais. O padrao antigo usava D:\ que, em muitas estacoes, e
+# uma midia protegida contra gravacao (CD/DVD). Usar a pasta do usuario evita
+# falhas de permissao ao iniciar a digitalizacao.
+_BASE_DIR = Path.home() / "DigitalizadorLivros"
+
 
 def is_frozen() -> bool:
     return getattr(sys, "frozen", False)
@@ -55,14 +60,14 @@ class SettingsError(Exception):
 class Settings:
     DEFAULTS: dict[str, Any] = {
         "czur": {
-            "watch_folder": r"D:\CZUR\Scans",
+            "watch_folder": str(_BASE_DIR / "CZUR" / "Scans"),
             "debounce_ms": 500,
         },
         "camera": {
             "index": 0,
         },
         "acervo": {
-            "root_path": r"D:\AcervoLivros",
+            "root_path": str(_BASE_DIR / "Acervo"),
         },
         "imaging": {
             "dpi": 300,
@@ -70,6 +75,8 @@ class Settings:
             "storage_dpi": 300,
             "storage_jpeg_quality": 75,
             "thumb_width": 200,
+            # Modo scan: recorte de pagina + perspectiva + fundo clareado.
+            "enhance_enabled": True,
         },
         "ocr": {
             "tesseract_path": "",

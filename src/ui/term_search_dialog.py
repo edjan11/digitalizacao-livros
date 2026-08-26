@@ -18,6 +18,7 @@ from PySide6.QtWidgets import (
 
 from ..database.repository import Repository
 from .image_viewer import ImageViewer
+from .theme import VERDE_ESMERALDA, VERDE_ESMERALDA_HOVER, TEXTO_PRIMARIO, SECUNDARIO_BG, SECUNDARIO_BORDA, TEXTO_NEON, SUPERFICIE, BORDA
 
 
 def posicao_do_termo(termo: int, termo_inicial: int, termo_final: int) -> tuple[int, int]:
@@ -61,8 +62,9 @@ class TermSearchDialog(QDialog):
         btn = QPushButton("BUSCAR")
         btn.setMinimumHeight(38)
         btn.setStyleSheet(
-            "QPushButton { background: #1976d2; color: white; font-weight: bold; "
-            "border-radius: 5px; padding: 4px 24px; }"
+            f"QPushButton {{ background-color: {VERDE_ESMERALDA}; color: {TEXTO_PRIMARIO}; "
+            f"font-weight: bold; border-radius: 5px; padding: 4px 24px; border: none; }} "
+            f"QPushButton:hover {{ background-color: {VERDE_ESMERALDA_HOVER}; }}"
         )
         btn.clicked.connect(self._buscar)
         busca.addWidget(btn)

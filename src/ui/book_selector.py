@@ -11,6 +11,10 @@ from PySide6.QtGui import QFont
 
 from ..database.repository import Repository
 from ..session.scan_session import ScanSession
+from .theme import (
+    SUPERFICIE, BORDA, SECUNDARIO_BG, SECUNDARIO_BORDA, VERDE_ESMERALDA,
+    VERDE_ESMERALDA_HOVER, STATUS_ATENCAO, TEXTO_PRIMARIO, TEXTO_NEON,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -60,7 +64,11 @@ class BookSelector(QWidget):
     def _show_session_banner(self) -> None:
         self._clear_stack()
         banner = QFrame()
-        banner.setStyleSheet("QFrame { background: #e3f2fd; border-radius: 8px; padding: 12px; }")
+        banner.setObjectName("panel")
+        banner.setStyleSheet(
+            f"QFrame#panel {{ background-color: {SUPERFICIE}; border: 1px solid {BORDA}; "
+            "border-radius: 8px; padding: 12px; }}"
+        )
         bl = QVBoxLayout(banner)
         title = QLabel("Sessao anterior encontrada")
         title.setFont(QFont("Segoe UI", 14, QFont.Weight.Bold))
@@ -77,7 +85,11 @@ class BookSelector(QWidget):
         btn_layout = QHBoxLayout()
         btn_continuar = QPushButton("CONTINUAR")
         btn_continuar.setMinimumHeight(50)
-        btn_continuar.setStyleSheet("QPushButton { background: #4caf50; color: white; font-size: 16px; font-weight: bold; border-radius: 6px; } QPushButton:hover { background: #43a047; }")
+        btn_continuar.setStyleSheet(
+            f"QPushButton {{ background-color: {VERDE_ESMERALDA}; color: {TEXTO_PRIMARIO}; "
+            f"font-size: 16px; font-weight: bold; border-radius: 6px; border: none; }} "
+            f"QPushButton:hover {{ background-color: {VERDE_ESMERALDA_HOVER}; }}"
+        )
         btn_continuar.clicked.connect(self.continuar_sessao.emit)
         btn_layout.addWidget(btn_continuar)
         btn_novo = QPushButton("Escolher outro livro")
@@ -99,9 +111,9 @@ class BookSelector(QWidget):
             btn = QPushButton(oficio["nome"])
             btn.setMinimumHeight(55)
             btn.setStyleSheet(
-                "QPushButton { font-size: 14px; border: 2px solid #1976d2; border-radius: 8px; "
-                "background: white; color: #1976d2; } "
-                "QPushButton:hover { background: #e3f2fd; }"
+                f"QPushButton {{ font-size: 14px; font-weight: 600; border: 2px solid {SECUNDARIO_BORDA}; "
+                f"border-radius: 8px; background-color: {SUPERFICIE}; color: {TEXTO_PRIMARIO}; }} "
+                f"QPushButton:hover {{ background-color: {SECUNDARIO_BG}; border: 2px solid #5A6678; }}"
             )
             btn.clicked.connect(lambda checked=False, o=oficio: self._on_oficio(o))
             grid.addWidget(btn)
@@ -132,9 +144,9 @@ class BookSelector(QWidget):
             btn = QPushButton(tipo["nome"])
             btn.setMinimumHeight(55)
             btn.setStyleSheet(
-                "QPushButton { font-size: 14px; border: 2px solid #388e3c; border-radius: 8px; "
-                "background: white; color: #388e3c; } "
-                "QPushButton:hover { background: #e8f5e9; }"
+                f"QPushButton {{ font-size: 14px; font-weight: 600; border: 2px solid {VERDE_ESMERALDA}; "
+                f"border-radius: 8px; background-color: {SUPERFICIE}; color: {TEXTO_PRIMARIO}; }} "
+                f"QPushButton:hover {{ background-color: {SECUNDARIO_BG}; }}"
             )
             subtipos = self.repo.listar_tipos(tipo["id"])
             tem_subtipos = len(subtipos) > 0
@@ -171,9 +183,9 @@ class BookSelector(QWidget):
             btn = QPushButton(st["nome"])
             btn.setMinimumHeight(55)
             btn.setStyleSheet(
-                "QPushButton { font-size: 14px; border: 2px solid #f57c00; border-radius: 8px; "
-                "background: white; color: #f57c00; } "
-                "QPushButton:hover { background: #fff3e0; }"
+                f"QPushButton {{ font-size: 14px; font-weight: 600; border: 2px solid {STATUS_ATENCAO}; "
+                f"border-radius: 8px; background-color: {SUPERFICIE}; color: {TEXTO_PRIMARIO}; }} "
+                f"QPushButton:hover {{ background-color: {SECUNDARIO_BG}; }}"
             )
             btn.clicked.connect(lambda checked=False, s=st: self._on_subtipo(s))
             grid.addWidget(btn)
@@ -215,18 +227,19 @@ class BookSelector(QWidget):
             btn = QPushButton(f"{status_emoji}  {livro['codigo'] or 'Sem codigo'} - {livro['nome_capa'] or 'Sem nome'}{conferido}")
             btn.setMinimumHeight(50)
             btn.setStyleSheet(
-                "QPushButton { font-size: 13px; border: 1px solid #9e9e9e; border-radius: 6px; "
-                "background: white; text-align: left; padding-left: 12px; } "
-                "QPushButton:hover { background: #f5f5f5; }"
+                f"QPushButton {{ font-size: 13px; border: 1px solid {BORDA}; border-radius: 6px; "
+                f"background-color: {SUPERFICIE}; color: {TEXTO_PRIMARIO}; "
+                "text-align: left; padding-left: 12px; } "
+                f"QPushButton:hover {{ background-color: {SECUNDARIO_BG}; border: 1px solid #5A6678; }}"
             )
             btn.clicked.connect(lambda checked=False, l=livro: self._on_livro(l))
             grid.addWidget(btn)
         btn_novo = QPushButton("+ NOVO LIVRO")
         btn_novo.setMinimumHeight(55)
         btn_novo.setStyleSheet(
-            "QPushButton { font-size: 14px; border: 2px dashed #4caf50; border-radius: 8px; "
-            "background: #e8f5e9; color: #2e7d32; font-weight: bold; } "
-            "QPushButton:hover { background: #c8e6c9; }"
+            f"QPushButton {{ font-size: 14px; border: 2px dashed {VERDE_ESMERALDA}; border-radius: 8px; "
+            f"background-color: {SUPERFICIE}; color: {VERDE_ESMERALDA}; font-weight: bold; }} "
+            f"QPushButton:hover {{ background-color: {SECUNDARIO_BG}; }}"
         )
         btn_novo.clicked.connect(self.criar_livro_clicked.emit)
         grid.addWidget(btn_novo)

@@ -2,23 +2,35 @@ from __future__ import annotations
 
 import logging
 from collections import deque
+from datetime import datetime
 from pathlib import Path
 
+import cv2
+import numpy as np
 from PySide6.QtCore import Qt, QThread, Signal, Slot
 from PySide6.QtGui import QFont
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QFrame, QGroupBox,
-    QProgressBar, QMessageBox,
+    QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel, QPushButton, QFrame, QGroupBox,
+    QProgressBar, QMessageBox, QPlainTextEdit, QToolButton, QMenu,
 )
 
-from ..database.repository import Repository
-from ..session.scan_session import ScanSession
-from ..services.scan_pipeline import ScanPipeline
-from ..services.telemetry import emitir, registrar_amostrador
+from src.database.repository import Repository
+from src.session.scan_session import ScanSession
+from src.services.scan_pipeline import ScanPipeline
+from src.services.telemetry import emitir, registrar_amostrador
+from src.imaging.thumbnail import gerar_thumbnail
+from src.imaging.quality import avaliar_qualidade
+from src.imaging.enhance import melhorar_pagina
 from .book_review_dialog import BookReviewDialog
 from .term_search_dialog import TermSearchDialog
 from .camera_capture_dialog import CameraCaptureDialog
 from .image_viewer import ImageViewer
+from .theme import (
+    G_IR_ESQ, G_IR_DIR, G_ESPELHAR, G_CORTAR, G_OTIMIZAR, G_IMAGEM, G_FOCO,
+    G_ENQUAD, G_DUP, G_OCR, G_SCANNER, TEXTO_SECUNDARIO, TEXTO_NEON, STATUS_OK,
+    STATUS_ATENCAO, STATUS_ERRO, BTN_PRIMARIO, BTN_SECUNDARIO, BTN_ALERTA,
+    status_visual,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -85,191 +97,287 @@ class ScanScreen(QWidget):
 
         registrar_amostrador("filas_ui", _tamanhos_filas)
         self._init_ui()
+        self._atualizar_breadcrumb()
+        self._habilitar_transform(False)
         self._atualizar_pendentes()
+
+    # ------------------------------------------------------------------
+    # Construcao da interface (apenas visual)
 
     def _init_ui(self) -> None:
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(12, 12, 12, 12)
+        layout.setContentsMargins(14, 12, 14, 12)
+        layout.setSpacing(10)
 
-        header = QHBoxLayout()
-        path_text = self.session.resumo
-        titulo = QLabel(path_text)
-        titulo.setFont(QFont("Segoe UI", 12, QFont.Weight.Bold))
-        titulo.setStyleSheet("color: #1565c0;")
-        header.addWidget(titulo)
-        header.addStretch()
-        self.lbl_pendentes = QPushButton("Revisao (0)")
-        self.lbl_pendentes.setStyleSheet(
-            "QPushButton { background: #ff9800; color: white; border-radius: 4px; padding: 4px 12px; font-weight: bold; } "
-            "QPushButton:hover { background: #f57c00; }"
-        )
-        self.lbl_pendentes.clicked.connect(self.revisao_clicked.emit)
-        header.addWidget(self.lbl_pendentes)
-        btn_conferir = QPushButton("Conferir livro")
-        btn_conferir.setStyleSheet(
-            "QPushButton { background: #2e7d32; color: white; border-radius: 4px; "
-            "padding: 4px 12px; font-weight: bold; }"
-            "QPushButton:hover { background: #1b5e20; }"
-        )
-        btn_conferir.setToolTip(
-            "Resumo do livro: aprovadas, revisões, fotos a refazer e faltantes."
-        )
-        btn_conferir.clicked.connect(self._abrir_conferencia)
-        header.addWidget(btn_conferir)
-        btn_buscar = QPushButton("Buscar termo")
-        btn_buscar.setStyleSheet(
-            "QPushButton { background: #1976d2; color: white; border-radius: 4px; "
-            "padding: 4px 12px; font-weight: bold; }"
-        )
-        btn_buscar.clicked.connect(self._buscar_termo)
-        header.addWidget(btn_buscar)
-        btn_camera = QPushButton("Camera automatica")
-        btn_camera.setStyleSheet(
-            "QPushButton { background: #00897b; color: white; border-radius: 4px; "
-            "padding: 4px 12px; font-weight: bold; }"
-        )
-        btn_camera.clicked.connect(self._abrir_camera_automatica)
-        header.addWidget(btn_camera)
-        layout.addLayout(header)
+        # 2. Breadcrumb de hierarquia
+        self.lbl_breadcrumb = QLabel()
+        self.lbl_breadcrumb.setTextFormat(Qt.TextFormat.RichText)
+        self.lbl_breadcrumb.setFont(QFont("Segoe UI", 12))
+        layout.addWidget(self.lbl_breadcrumb)
 
-        info_bar = QFrame()
-        info_bar.setStyleSheet("QFrame { background: #f5f5f5; border-radius: 6px; padding: 8px; }")
-        info_layout = QHBoxLayout(info_bar)
-        info_layout.setContentsMargins(8, 4, 8, 4)
-        info1 = QLabel(f"Folha: {self.session.ultima_folha} - {self.session.ultima_face.capitalize()}" if self.session.ultima_folha else "Aguardando imagens...")
-        info1.setFont(QFont("Segoe UI", 13, QFont.Weight.Bold))
-        info_layout.addWidget(info1)
-        self.lbl_folha_face = info1
-        info_layout.addStretch()
-        info2 = QLabel(f"Termo: {self.session.ultimo_termo}" if self.session.ultimo_termo else "")
-        info2.setFont(QFont("Segoe UI", 12))
-        info_layout.addWidget(info2)
-        self.lbl_termo = info2
-        layout.addWidget(info_bar)
+        # 3. Toolbar de acao rapida (canto superior direito)
+        toolbar = QHBoxLayout()
+        toolbar.addStretch()
+        toolbar.addLayout(self._criar_grupo_acoes_imagem())
+        toolbar.addSpacing(10)
+        toolbar.addLayout(self._criar_grupo_estado())
+        layout.addLayout(toolbar)
 
-        # A fotografia Ã© o elemento principal da tela. Indicadores e
-        # contadores ficam em uma coluna estreita, sem reduzir a Ã¡rea Ãºtil
-        # para o operador conferir foco e enquadramento.
+        # 4 + 5. Viewport central + sidebar de indicadores
         content = QHBoxLayout()
-        content.setSpacing(10)
+        content.setSpacing(12)
+        content.addWidget(self._criar_viewport(), 1)
+        content.addWidget(self._criar_indicadores(), 0)
+        layout.addLayout(content)
 
-        foto_panel = QFrame()
-        foto_panel.setStyleSheet(
-            "QFrame { border: 1px solid #607d8b; border-radius: 8px; background: #202124; }"
-        )
-        foto_layout = QVBoxLayout(foto_panel)
-        foto_layout.setContentsMargins(6, 6, 6, 6)
-        foto_header = QHBoxLayout()
-        foto_title = QLabel("FOTO CAPTURADA — confira o enquadramento")
-        foto_title.setStyleSheet("color:#ffffff; font-weight:bold; font-size:13px;")
-        foto_header.addWidget(foto_title)
-        foto_header.addStretch()
-        btn_foto_pagina = QPushButton("Ajustar à página")
-        btn_foto_pagina.setToolTip("Mostrar a fotografia inteira")
-        btn_foto_pagina.clicked.connect(lambda: self.foto_viewer.fit_to_page())
-        foto_header.addWidget(btn_foto_pagina)
-        btn_foto_100 = QPushButton("100%")
-        btn_foto_100.clicked.connect(self.foto_viewer_zoom_100)
-        foto_header.addWidget(btn_foto_100)
-        foto_layout.addLayout(foto_header)
+        # Acoes de finalizacao / navegacao
+        layout.addLayout(self._criar_acoes_fim())
+
+        # 6. Barra de status + console
+        layout.addLayout(self._criar_rodape())
+
+    def _criar_grupo_acoes_imagem(self) -> QHBoxLayout:
+        h = QHBoxLayout()
+        h.setSpacing(6)
+        btn_girar_esq = QPushButton(f"{G_IR_ESQ}  Girar Esq.")
+        btn_girar_dir = QPushButton(f"{G_IR_DIR}  Girar Dir.")
+        btn_espelhar = QToolButton()
+        btn_espelhar.setText(f"{G_ESPELHAR}  Espelhar H/V")
+        btn_espelhar.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+        menu_esp = QMenu(btn_espelhar)
+        menu_esp.addAction("Espelhar Horizontal", lambda: self._aplicar_transformacao(cv2.flip, 1, nome="espelhar_h"))
+        menu_esp.addAction("Espelhar Vertical", lambda: self._aplicar_transformacao(cv2.flip, 0, nome="espelhar_v"))
+        btn_espelhar.setMenu(menu_esp)
+        btn_cortar = QPushButton(f"{G_CORTAR}  Cortar")
+        btn_otimizar = QPushButton(f"{G_OTIMIZAR}  Otimizar")
+        btn_girar_esq.clicked.connect(lambda: self._aplicar_transformacao(cv2.ROTATE_90_COUNTERCLOCKWISE, "girar_esq"))
+        btn_girar_dir.clicked.connect(lambda: self._aplicar_transformacao(cv2.ROTATE_90_CLOCKWISE, "girar_dir"))
+        btn_cortar.clicked.connect(self._cortar_foto)
+        btn_otimizar.clicked.connect(self._otimizar_foto)
+        for b in (btn_girar_esq, btn_girar_dir, btn_espelhar, btn_cortar, btn_otimizar):
+            b.setStyleSheet(BTN_SECUNDARIO)
+            b.setToolTip("Corrige a fotografia armazenada (persiste na imagem)")
+        self._botoes_transform = (btn_girar_esq, btn_girar_dir, btn_espelhar, btn_cortar, btn_otimizar)
+        for b in self._botoes_transform:
+            h.addWidget(b)
+        return h
+
+    def _criar_grupo_estado(self) -> QHBoxLayout:
+        h = QHBoxLayout()
+        h.setSpacing(8)
+        self.lbl_pendentes = QPushButton("Revisao (0)")
+        self.lbl_pendentes.setStyleSheet(BTN_ALERTA)
+        self.lbl_pendentes.clicked.connect(self.revisao_clicked.emit)
+        btn_conferir = QPushButton("Conferir Livro")
+        btn_conferir.setStyleSheet(BTN_PRIMARIO)
+        btn_conferir.setToolTip("Resumo do livro: aprovadas, revisões, fotos a refazer e faltantes.")
+        btn_conferir.clicked.connect(self._abrir_conferencia)
+        btn_exportar = QPushButton("Exportar Termos")
+        btn_exportar.setStyleSheet(BTN_SECUNDARIO)
+        btn_exportar.clicked.connect(self._exportar_termos)
+        btn_modo = QToolButton()
+        btn_modo.setText("Modos de Captura  ▾")
+        btn_modo.setStyleSheet(BTN_SECUNDARIO)
+        btn_modo.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+        menu_modo = QMenu(btn_modo)
+        menu_modo.addAction("Câmera automática", self._abrir_camera_automatica)
+        menu_modo.addAction("Buscar termo", self._buscar_termo)
+        btn_modo.setMenu(menu_modo)
+        h.addWidget(self.lbl_pendentes)
+        h.addWidget(btn_conferir)
+        h.addWidget(btn_exportar)
+        h.addWidget(btn_modo)
+        return h
+
+    def _criar_viewport(self) -> QFrame:
         self.foto_viewer = ImageViewer()
         self.foto_viewer.setMinimumSize(620, 430)
         self.foto_viewer.set_selection_mode(False)
-        foto_layout.addWidget(self.foto_viewer, 1)
-        self.lbl_foto_info = QLabel("Nenhuma fotografia capturada ainda")
-        self.lbl_foto_info.setStyleSheet("color:#d9e2ec; font-size:11px;")
+
+        foto_panel = QFrame()
+        foto_panel.setObjectName("panel")
+        foto_layout = QVBoxLayout(foto_panel)
+        foto_layout.setContentsMargins(10, 10, 10, 10)
+        foto_layout.setSpacing(8)
+
+        topo = QHBoxLayout()
+        self.lbl_scanner = QLabel(f"{G_SCANNER}  SCANNER CONECTADO")
+        self.lbl_scanner.setStyleSheet(f"color: {STATUS_OK}; font-weight: bold; font-size: 12px;")
+        topo.addWidget(self.lbl_scanner)
+        topo.addStretch()
+        btn_fit = QPushButton("Ajustar à página")
+        btn_fit.setToolTip("Mostrar a fotografia inteira")
+        btn_fit.clicked.connect(self.foto_viewer.fit_to_page)
+        btn_100 = QPushButton("100%")
+        btn_100.clicked.connect(self.foto_viewer_zoom_100)
+        for b in (btn_fit, btn_100):
+            b.setStyleSheet(BTN_SECUNDARIO)
+            topo.addWidget(b)
+        foto_layout.addLayout(topo)
+
+        grid = QGridLayout()
+        grid.setContentsMargins(0, 0, 0, 0)
+        grid.addWidget(self.foto_viewer, 0, 0)
+        self._overlay = QLabel("Aguardando captura do scanner de mesa ou arquivo...")
+        self._overlay.setStyleSheet(f"color: {TEXTO_NEON}; font-size: 14px;")
+        self._overlay.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        grid.addWidget(self._overlay, 0, 0)
+        self._overlay.raise_()
+        foto_layout.addLayout(grid, 1)
+
+        self.lbl_foto_info = QLabel("Aguardando imagens...")
+        self.lbl_foto_info.setStyleSheet(f"color: {TEXTO_SECUNDARIO}; font-size: 11px;")
         self.lbl_foto_info.setWordWrap(True)
         foto_layout.addWidget(self.lbl_foto_info)
-        content.addWidget(foto_panel, 1)
 
-        indicators = QGroupBox("Indicadores")
-        indicators.setStyleSheet("QGroupBox { font-weight: bold; font-size: 12px; }")
-        ind_layout = QVBoxLayout(indicators)
-        ind_layout.setSpacing(6)
+        self.lbl_folha_face = QLabel("")
+        self.lbl_folha_face.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
+        self.lbl_folha_face.setStyleSheet(f"color: {TEXTO_NEON};")
+        self.lbl_termo = QLabel("")
+        self.lbl_termo.setStyleSheet(f"color: {TEXTO_NEON};")
+        info = QHBoxLayout()
+        info.addWidget(self.lbl_folha_face)
+        info.addStretch()
+        info.addWidget(self.lbl_termo)
+        foto_layout.addLayout(info)
+        return foto_panel
 
-        self.ind_imagem = self._make_indicator("Imagem")
-        self.ind_foco = self._make_indicator("Foco")
-        self.ind_enquadramento = self._make_indicator("Enquadramento")
-        self.ind_duplicidade = self._make_indicator("Duplicidade")
-        self.ind_ocr = self._make_indicator("OCR")
+    def _criar_indicadores(self) -> QGroupBox:
+        box = QGroupBox("Indicadores")
+        layout = QVBoxLayout(box)
+        layout.setSpacing(8)
+        self._indicadores = {}
+        for chave, nome, glyph in (
+            ("imagem", "Imagem Qualidade", G_IMAGEM),
+            ("foco", "Foco", G_FOCO),
+            ("enquadramento", "Enquadramento", G_ENQUAD),
+            ("duplicidade", "Duplicidade", G_DUP),
+            ("ocr", "OCR", G_OCR),
+        ):
+            row = QHBoxLayout()
+            icone = QLabel(glyph)
+            icone.setStyleSheet(f"color: {TEXTO_NEON}; font-size: 13px;")
+            row.addWidget(icone)
+            nome_lbl = QLabel(nome + ":")
+            nome_lbl.setStyleSheet(f"color: {TEXTO_NEON};")
+            row.addWidget(nome_lbl)
+            row.addStretch()
+            status = QLabel("•")
+            status.setStyleSheet(f"color: {TEXTO_SECUNDARIO}; font-weight: bold; font-size: 13px;")
+            row.addWidget(status)
+            layout.addLayout(row)
+            self._indicadores[chave] = status
+        layout.addStretch()
+        box.setMinimumWidth(240)
+        box.setMaximumWidth(300)
+        return box
 
-        ind_layout.addWidget(self.ind_imagem)
-        ind_layout.addWidget(self.ind_foco)
-        ind_layout.addWidget(self.ind_enquadramento)
-        ind_layout.addWidget(self.ind_duplicidade)
-        ind_layout.addWidget(self.ind_ocr)
-        ind_layout.addStretch()
-        indicators.setMinimumWidth(250)
-        indicators.setMaximumWidth(310)
-        content.addWidget(indicators, 0)
-        layout.addLayout(content)
-
-        self.progress = QProgressBar()
-        self.progress.setVisible(False)
-        self.progress.setTextVisible(True)
-        layout.addWidget(self.progress)
-
-        bottom = QHBoxLayout()
+    def _criar_acoes_fim(self) -> QHBoxLayout:
+        h = QHBoxLayout()
         btn_voltar = QPushButton("Trocar Livro")
+        btn_voltar.setStyleSheet(BTN_SECUNDARIO)
         btn_voltar.clicked.connect(self._on_voltar)
-        bottom.addWidget(btn_voltar)
+        h.addWidget(btn_voltar)
         btn_pausar = QPushButton("Pausar")
+        btn_pausar.setStyleSheet(BTN_SECUNDARIO)
         btn_pausar.clicked.connect(self._on_pausar)
-        bottom.addWidget(btn_pausar)
-        bottom.addStretch()
-        self.btn_finalizar = QPushButton("Finalizar Livro")
-        self.btn_finalizar.setStyleSheet(
-            "QPushButton { background: #4caf50; color: white; border-radius: 6px; padding: 6px 16px; font-weight: bold; } "
-            "QPushButton:hover { background: #43a047; }"
-        )
-        self.btn_finalizar.clicked.connect(self._on_finalizar)
-        bottom.addWidget(self.btn_finalizar)
-        layout.addLayout(bottom)
-
-    def _make_indicator(self, name: str) -> QFrame:
-        frame = QFrame()
-        frame.setStyleSheet("QFrame { background: white; border: 1px solid #e0e0e0; border-radius: 4px; padding: 4px; }")
-        h = QHBoxLayout(frame)
-        h.setContentsMargins(8, 2, 8, 2)
-        label = QLabel(name + ":")
-        label.setFont(QFont("Segoe UI", 10))
-        h.addWidget(label)
+        h.addWidget(btn_pausar)
         h.addStretch()
-        status = QLabel("...")
-        status.setFont(QFont("Segoe UI", 10, QFont.Weight.Bold))
-        h.addWidget(status)
-        frame._status_label = status
-        return frame
+        self.btn_finalizar = QPushButton("Finalizar Livro")
+        self.btn_finalizar.setStyleSheet(BTN_PRIMARIO)
+        self.btn_finalizar.clicked.connect(self._on_finalizar)
+        h.addWidget(self.btn_finalizar)
+        return h
 
-    def _set_indicator(self, frame: QFrame, status: str, value: str = "") -> None:
-        label: QLabel = frame._status_label
-        color = {
-            "ok": "#4caf50", "confirmado": "#4caf50", "provavel": "#7cb342",
-            "inferido_sequencia": "#1976d2", "aviso": "#ff9800",
-            "duvidoso": "#ff9800", "revisar": "#f44336",
-            "precisa_revisao": "#f44336", "erro_grave": "#d32f2f",
-        }.get(status, "#9e9e9e")
-        text = {
-            "ok": "OK", "confirmado": "CONFIRMADO", "provavel": "PROVAVEL",
-            "inferido_sequencia": "SEQUENCIA", "aviso": "AVISO",
-            "revisar": "REVISAR", "precisa_revisao": "REVISAR",
-            "erro_grave": "ERRO",
-        }.get(status, status.upper())
+    def _criar_rodape(self) -> QHBoxLayout:
+        h = QHBoxLayout()
+        self._console = QPlainTextEdit()
+        self._console.setReadOnly(True)
+        self._console.setMaximumHeight(72)
+        self._console.setStyleSheet(
+            f"color: {TEXTO_SECUNDARIO}; font-size: 10px; border: 1px solid #343B48; border-radius: 4px;"
+        )
+        h.addWidget(self._console, 1)
+        self.lbl_status = QLabel("Digitalização automática de mesa ativada.")
+        self.lbl_status.setStyleSheet(f"color: {TEXTO_NEON}; font-size: 10px;")
+        self.lbl_status.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        h.addWidget(self.lbl_status, 0)
+        return h
+
+    # ------------------------------------------------------------------
+    # Indicadores / status (apenas visual)
+
+    def _set_indicator(self, chave: str, status: str, value: str = "") -> None:
+        label = self._indicadores.get(chave)
+        if label is None:
+            return
+        glyph, cor = status_visual(status)
+        texto = glyph
         if value:
-            text = f"{text}  {value}"
-        label.setText(text)
-        label.setStyleSheet(f"color: {color}; font-weight: bold;")
+            texto = f"{glyph}  {value}"
+        label.setText(texto)
+        label.setStyleSheet(f"color: {cor}; font-weight: bold; font-size: 13px;")
+        label.setToolTip((value or status).upper())
+
+    def _ind_tooltip(self, chave: str, texto: str) -> None:
+        label = self._indicadores.get(chave)
+        if label is not None:
+            label.setToolTip(texto)
+
+    def _atualizar_breadcrumb(self) -> None:
+        oficio = self.repo.get_oficio(self.session.oficio_id) if self.session.oficio_id else None
+        tipo = self.repo.get_tipo(self.session.tipo_id) if self.session.tipo_id else None
+        livro = (self.session.livro or {}).get("codigo") or ""
+        o = (oficio or {}).get("nome") or f"{self.session.oficio_id}º Ofício"
+        t = (tipo or {}).get("nome") or "Tipo"
+        self.lbl_breadcrumb.setText(
+            f"<span style='color: {TEXTO_SECUNDARIO}'>{o}</span> &nbsp;&gt;&nbsp; "
+            f"<span style='color: {TEXTO_NEON}'>{t}</span> &nbsp;&gt;&nbsp; "
+            f"<span style='color: {TEXTO_NEON}; font-weight: bold;'>{livro}</span>"
+        )
+
+    def set_scanner_status(self, conectado: bool) -> None:
+        if conectado:
+            self.lbl_scanner.setText(f"{G_SCANNER}  SCANNER CONECTADO")
+            self.lbl_scanner.setStyleSheet(f"color: {STATUS_OK}; font-weight: bold; font-size: 12px;")
+            self.log("Scanner de Mesa OK.")
+        else:
+            self.lbl_scanner.setText(f"{G_SCANNER}  AGUARDANDO SCANNER")
+            self.lbl_scanner.setStyleSheet(f"color: {TEXTO_SECUNDARIO}; font-weight: bold; font-size: 12px;")
+
+    def log(self, mensagem: str) -> None:
+        self._console.appendPlainText(f"[{datetime.now().strftime('%H:%M:%S')}] - {mensagem}")
+
+    def _set_overlay_visivel(self, visivel: bool) -> None:
+        self._overlay.setVisible(visivel)
+
+    def _otimizar_foto(self) -> None:
+        p = self._caminho_edicao()
+        if p is None:
+            return
+        image = cv2.imread(str(p))
+        if image is None:
+            return
+        melhorada, info = melhorar_pagina(image, ativo=True)
+        self._salvar_transformada(p, melhorada, "otimizar: auto" if info.get("aplicado") else "otimizar: original")
+        self.log("Foto otimizada (recorte/perspectiva/clareamento).")
+
+    def _exportar_termos(self) -> None:
+        QMessageBox.information(
+            self, "Exportar Termos",
+            "A exportação de termos será disponibilizada em uma próxima versão."
+        )
+
+    # ------------------------------------------------------------------
+    # Fluxo de captura (logica preservada)
 
     def foto_viewer_zoom_100(self) -> None:
         self.foto_viewer.zoom_100()
 
     def processar_nova_imagem(self, image_path: str) -> None:
-        # TambÃ©m as imagens vindas da pasta/CZUR entram na mesma fila da
-        # cÃ¢mera. Assim uma sÃ©rie de fotos nunca congela a visualizaÃ§Ã£o.
         self._captura_queue.append(str(image_path))
         self._set_indicator(
-            self.ind_imagem,
-            "aviso",
+            "imagem", "aviso",
             f"fila: {len(self._captura_queue) + (1 if self._captura_worker else 0)}",
         )
         self._iniciar_proxima_captura()
@@ -277,10 +385,9 @@ class ScanScreen(QWidget):
     def _aplicar_resultado_captura(self, result: dict) -> None:
         self._ultimo_resultado = result
         self._ultima_imagem_id = result.get("imagem_id")
+        self._habilitar_transform(True)
         self._atualizar_ui_imediatamente(result)
         if result.get("aguarda_confirmacao_duplicidade") and self._ultima_imagem_id:
-            # Esta rara pergunta precisa ser resolvida na hora, pois uma
-            # página repetida não pode avançar folha/termos.
             self._confirmar_possivel_duplicata(result)
         if result.get("nao_registro"):
             self.progress.setVisible(False)
@@ -316,32 +423,36 @@ class ScanScreen(QWidget):
             termo_f = resolvida.get("termo_final")
             faixa = str(termo_i) if termo_i == termo_f else f"{termo_i}-{termo_f}"
             self.lbl_termo.setText(f"Duplicata dos termos: {faixa}")
-            self._set_indicator(self.ind_duplicidade, "revisar", "CONFIRMADA")
+            self._set_indicator("duplicidade", "revisar", "CONFIRMADA")
         else:
-            self._set_indicator(self.ind_duplicidade, "ok", "NAO E DUPLICATA")
+            self._set_indicator("duplicidade", "ok", "NAO E DUPLICATA")
         self._atualizar_pendentes()
 
     def _atualizar_ui_imediatamente(self, result: dict) -> None:
         self._mostrar_foto_resultado(result)
+        folha = result.get("folha")
+        face = result.get("face", "")
+        if folha:
+            self.log(f"Pagina {folha} ({face.capitalize()}) capturada.")
         q = result.get("qualidade", {})
         if result.get("nao_registro"):
-            self._set_indicator(self.ind_imagem, "revisar", "SEM TERMO / CONTAGEM PARADA")
-            self._set_indicator(self.ind_ocr, "aviso", "NAO EXECUTADO")
+            self._set_indicator("imagem", "revisar", "SEM TERMO / CONTAGEM PARADA")
+            self._set_indicator("ocr", "aviso", "NAO EXECUTADO")
             self.lbl_folha_face.setText("Documento preservado — não é face de registro")
             self.lbl_termo.setText("Nenhum termo atribuído; contador não avançou")
             return
         if q.get("repetir_captura"):
             motivos = ", ".join(q.get("motivos_refazer", []))
-            self._set_indicator(self.ind_imagem, "revisar", "REFAZER DEPOIS")
-            self.ind_imagem._status_label.setToolTip(motivos)
+            self._set_indicator("imagem", "revisar", "REFAZER DEPOIS")
+            self._ind_tooltip("imagem", motivos)
         else:
-            self._set_indicator(self.ind_imagem, q.get("status_geral", "ok"))
-        self._set_indicator(self.ind_foco, q.get("foco_status", "ok"))
-        self._set_indicator(self.ind_enquadramento, q.get("enquadramento_status", "ok"))
+            self._set_indicator("imagem", q.get("status_geral", "ok"))
+        self._set_indicator("foco", q.get("foco_status", "ok"))
+        self._set_indicator("enquadramento", q.get("enquadramento_status", "ok"))
         dup = result.get("duplicidade", {})
-        self._set_indicator(self.ind_duplicidade, "revisar" if dup.get("status") != "unico" else "ok")
+        self._set_indicator("duplicidade", "revisar" if dup.get("status") != "unico" else "ok")
         self.lbl_folha_face.setText(
-            f"Folha: {result.get('folha')} - {result.get('face', '').capitalize()}"
+            f"Folha: {folha} - {face.capitalize()}" if folha else "Aguardando imagens..."
         )
         termo_inicial = result.get("termo_inicial")
         termo_final = result.get("termo_final")
@@ -368,6 +479,7 @@ class ScanScreen(QWidget):
                 origem = "armazenamento 300 DPI"
         if not caminho or not Path(caminho).is_file():
             return
+        self._set_overlay_visivel(False)
         self.foto_viewer.set_image_path(caminho)
         self.foto_viewer.fit_to_page()
         qualidade = result.get("qualidade", {})
@@ -415,7 +527,6 @@ class ScanScreen(QWidget):
         termo_inicial = result.get("termo_inicial")
         termo_final = result.get("termo_final")
         status = result.get("termo_status", "")
-        conf = result.get("termo_confianca", 0)
         folha = result.get("folha")
         if result.get("imagem_id") == self._ultima_imagem_id:
             if termo_inicial is not None:
@@ -425,29 +536,131 @@ class ScanScreen(QWidget):
                 self.lbl_termo.setText(f"Termo OCR: {termo or '?'} ({status})")
             if folha:
                 self.lbl_folha_face.setText(f"Folha: {folha} - {self.session.ultima_face.capitalize()}")
-            self._set_indicator(self.ind_ocr, status)
+            self._set_indicator("ocr", status)
         motor = result.get("motor", "")
         tempos = result.get("tempos_ms", {})
-        self.ind_ocr._status_label.setToolTip(f"Motor: {motor}\nTempos: {tempos}")
+        self._ind_tooltip("ocr", f"Motor: {motor}\nTempos: {tempos}")
+        self.log(f"OCR concluido — termo {termo_inicial if termo_inicial is not None else termo}")
         self._atualizar_pendentes()
 
     @Slot(str)
     def _on_ocr_erro(self, msg: str) -> None:
-        self._set_indicator(self.ind_ocr, "erro_grave", msg[:30])
+        self._set_indicator("ocr", "erro_grave", msg[:30])
+        self.log(f"Erro OCR: {msg}")
         logger.error("Erro OCR: %s", msg)
 
     def _atualizar_pendentes(self) -> None:
         count = self.repo.contar_revisoes_pendentes()
         self.lbl_pendentes.setText(f"Revisao ({count})" if count else "Revisao (0)")
         if count > 0:
-            self.lbl_pendentes.setStyleSheet(
-                "QPushButton { background: #f44336; color: white; border-radius: 4px; padding: 4px 12px; font-weight: bold; } "
-                "QPushButton:hover { background: #d32f2f; }"
-            )
+            self.lbl_pendentes.setStyleSheet(BTN_ALERTA)
         else:
-            self.lbl_pendentes.setStyleSheet(
-                "QPushButton { background: #9e9e9e; color: white; border-radius: 4px; padding: 4px 12px; font-weight: bold; }"
+            self.lbl_pendentes.setStyleSheet(BTN_PRIMARIO)
+
+    # ------------------------------------------------------------------
+    # Ferramentas de correcao da foto (giro, espelho, corte, otimizar)
+
+    def _habilitar_transform(self, estado: bool) -> None:
+        for b in self._botoes_transform:
+            b.setEnabled(estado)
+
+    def _caminho_edicao(self) -> Path | None:
+        if not self._ultima_imagem_id:
+            return None
+        img = self.repo.get_imagem(self._ultima_imagem_id)
+        if not img:
+            return None
+        p = Path(img.get("caminho_armazenamento") or img.get("caminho_original"))
+        return p if p.is_file() else None
+
+    def _aplicar_transformacao(self, op, *args, nome: str = "transformar") -> None:
+        p = self._caminho_edicao()
+        if p is None:
+            return
+        image = cv2.imread(str(p))
+        if image is None:
+            return
+        if op is cv2.flip:
+            image = cv2.flip(image, *args)
+        else:
+            image = cv2.rotate(image, op)
+        self._salvar_transformada(p, image, f"correcao: {nome}")
+
+    def _cortar_foto(self) -> None:
+        if not self._ultima_imagem_id:
+            return
+        rect = self.foto_viewer.selected_relative_rect()
+        if rect is None:
+            QMessageBox.information(
+                self, "Cortar", "Selecione primeiro uma area na foto com o mouse."
             )
+            return
+        p = self._caminho_edicao()
+        if p is None:
+            return
+        image = cv2.imread(str(p))
+        if image is None:
+            return
+        h, w = image.shape[:2]
+        x1 = max(0, min(int(rect[0] * w), w - 1))
+        x2 = max(x1 + 1, min(int(rect[2] * w), w))
+        y1 = max(0, min(int(rect[1] * h), h - 1))
+        y2 = max(y1 + 1, min(int(rect[3] * h), h))
+        crop = image[y1:y2, x1:x2]
+        self._salvar_transformada(p, crop, "corte de area")
+
+    def _salvar_transformada(self, p: Path, image: np.ndarray, motivo: str) -> None:
+        cv2.imwrite(str(p), image, [int(cv2.IMWRITE_JPEG_QUALITY), 90])
+        self._regenerar_thumb(p)
+        q = self._reavaliar_pos_transformacao(image)
+        self.foto_viewer.set_image_path(p)
+        self.foto_viewer.fit_to_page()
+        self._set_indicator("imagem", q.get("status_geral", "ok"), motivo)
+        self._set_indicator("foco", q.get("foco_status", "ok"))
+        self._set_indicator("enquadramento", q.get("enquadramento_status", "ok"))
+        self._atualizar_pendentes()
+        logger.info("Foto corrigida e salva em %s (%s)", p, motivo)
+
+    def _regenerar_thumb(self, p: Path) -> None:
+        img = self.repo.get_imagem(self._ultima_imagem_id)
+        thumb_path = Path(
+            img.get("caminho_thumb")
+            or (Path(p).parent.parent / "thumbs" / f"{Path(p).stem}_thumb.jpg")
+        )
+        thumb_path.parent.mkdir(parents=True, exist_ok=True)
+        orig = cv2.imread(str(p))
+        if orig is not None:
+            cv2.imwrite(str(thumb_path), gerar_thumbnail(orig), [int(cv2.IMWRITE_JPEG_QUALITY), 85])
+        self.repo.atualizar_imagem(
+            self._ultima_imagem_id, rotacao_visualizacao=0, caminho_thumb=str(thumb_path)
+        )
+
+    def _reavaliar_pos_transformacao(self, image: np.ndarray) -> dict:
+        """Reavalia a qualidade apos corrigir a foto e limpa a pendencia de
+        refotografia quando a orientacao era o unico motivo da revisao."""
+        partes = Path(self._caminho_edicao()).parts if self._caminho_edicao() else ()
+        q = avaliar_qualidade(image, exigir_margens="capturas_camera" in partes)
+        self.repo.atualizar_imagem(
+            self._ultima_imagem_id,
+            qualidade_foco=q.get("foco_valor"),
+            qualidade_exposicao=q.get("exposicao_valor"),
+            qualidade_enquadramento=q.get("enquadramento_status"),
+            qualidade_orientacao=0,
+            qualidade_status=q.get("status_geral"),
+            qualidade_oclusao=q.get("oclusao_valor"),
+            qualidade_motivos="; ".join(q.get("motivos_refazer", [])),
+        )
+        if not q.get("repetir_captura"):
+            self.repo.atualizar_imagem(self._ultima_imagem_id, precisa_revisao=0)
+            self.repo.resolver_revisoes_tipo(self._ultima_imagem_id, "refazer_captura")
+        try:
+            cl = self.pipeline._classificar_documento(image)
+            self.repo.atualizar_imagem(self._ultima_imagem_id, tipo_documento=cl.get("tipo"))
+            if cl.get("tipo") == "registro":
+                self.repo.resolver_revisoes_tipo(self._ultima_imagem_id, "classificar_documento")
+        except Exception:
+            logger.exception("Falha ao reclassificar apos transformacao")
+        return q
 
     def _abrir_conferencia(self) -> None:
         livro_id = self.session.livro_id
@@ -511,7 +724,8 @@ class ScanScreen(QWidget):
 
     @Slot(str)
     def _on_captura_erro(self, mensagem: str) -> None:
-        self._set_indicator(self.ind_imagem, "erro_grave", mensagem[:30])
+        self._set_indicator("imagem", "erro_grave", mensagem[:30])
+        self.log(f"Erro na captura: {mensagem}")
         logger.error("Erro na captura em segundo plano: %s", mensagem)
 
     @Slot()
